@@ -112,7 +112,6 @@ module Services =
 
                     loop ())
 
-
     open Internal
 
     type StaticCMSService(store: StaticStore) =
@@ -127,7 +126,6 @@ module Services =
                       ReplyChannel = Some rc })
 
             result.ToResult()
-
 
         member _.AddPage(reference, site, name, nameSlug) =
 
