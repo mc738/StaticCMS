@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Security.Cryptography
+open System.Text
 open Freql.Core.Common.Types
 open Freql.Sqlite
 
@@ -85,6 +86,9 @@ module DataStore =
                Hash = hash }: Parameters.NewTemplate)
             |> Operations.insertTemplate ctx
 
+        let getTemplate (ctx: SqliteContext) (name: string) =
+            Operations.selectTemplateRecord ctx [ "WHERE name = @0;" ] [ name ]
+
         let getLatestPageVersion (ctx: SqliteContext) (pageReference: string) =
             Operations.selectPageVersionRecord
                 ctx
@@ -95,11 +99,10 @@ module DataStore =
         let addPageVersion
             (ctx: SqliteContext)
             (pageReference: string)
+            (reference: string)
             (template: string)
             (isDraft: bool)
-            (raw: BlobField)
             =
-            let reference = newReference ()
 
             // Get latest version
             let version =
@@ -112,15 +115,26 @@ module DataStore =
                Version = version
                IsDraft = isDraft
                Template = template
-               RawBlob = raw
                CreatedOn = DateTime.UtcNow }: Parameters.NewPageVersion)
             |> Operations.insertPageVersion ctx
 
-            reference
-            
+        let addPageFragment (ctx: SqliteContext) versionReference template raw hash blobType =
+            ({ VersionReference = versionReference
+               Template = template
+               RawBlob = raw
+               Hash = hash
+               BlobType = blobType }: Parameters.NewPageFragment)
+            |> Operations.insertPageFragment ctx
+
         let getPageFragments (ctx: SqliteContext) (versionReference: string) =
             Operations.selectPageFragmentRecords ctx [ "WHERE version_reference = @0;" ] [ versionReference ]
-            
+
+        let addFragmentTemplate (ctx: SqliteContext) (name: string) (template: BlobField) (hash: string) =
+            ({ Name = name
+               Template = template
+               Hash = hash }: Parameters.NewFragmentTemplate)
+            |> Operations.insertFragmentTemplate ctx
+
         let getFragmentTemplate (ctx: SqliteContext) (name: string) =
             Operations.selectFragmentTemplateRecord ctx [ "WHERE name = @0;" ] [ name ]
 
@@ -128,6 +142,15 @@ module DataStore =
 
         static member Create(path) = Internal.initialize path |> StaticStore
 
+        member _.AddSite(name, url, rootPath) = Internal.addSite ctx name url rootPath
+
+        member _.GetSite(name) = Internal.getSiteByName ctx name
+        
+        member _.AddPage(reference, site, name, nameSlug) =
+            Internal.addPage ctx reference site name nameSlug
+
+        member _.GetPage(site, name) = Internal.getPageByName ctx site name
+        
         member _.AddTemplate(name: string, raw: byte array) =
             use ms = new MemoryStream(raw)
             let hash = hashStream (SHA256.Create()) ms
@@ -135,17 +158,45 @@ module DataStore =
 
             Internal.addTemplate ctx name bf hash
 
+        //member _.AddFragmentTemplate
+
+        member _.GetTemplate(name: string) = Internal.getTemplate ctx name
+        //|> Option.map (fun t -> t.RawBlob.ToBytes() |> Encoding.UTF8.GetString)
+
+        //Internal.gett
+
+        member store.GetTemplateString(name: string) =
+            store.GetTemplate name
+            |> Option.map (fun t -> t.RawBlob.ToBytes() |> Encoding.UTF8.GetString)
+
         member _.GetPageByName(site: string, name: string) = Internal.getPageByName ctx site name
 
         member _.GetLatestPageVersion(pageReference: string) =
             Internal.getLatestPageVersion ctx pageReference
-        
+
         member _.GetPageFragments(versionReference: string) =
             Internal.getPageFragments ctx versionReference
-            
-        member _.GetFragmentTemplate(name: string) =
-            Internal.getFragmentTemplate ctx name
-        
-        member _.AddPageVersion() =
 
-            ()
+        member _.GetFragmentTemplate(name: string) = Internal.getFragmentTemplate ctx name
+
+        //member store.GetFragmentTemplateString(name: string) =
+        //    store.GetFragmentTemplate name
+        //    |> Option.map (fun ft -> ft.Template.ToBytes() |> Encoding.UTF8.GetString)
+
+        member _.AddPageVersion(pageReference, reference, template, isDraft) =
+
+            Internal.addPageVersion ctx pageReference reference template isDraft
+
+        member _.AddFragmentTemplate(name: string, raw: byte array) =
+            use ms = new MemoryStream(raw)
+            let hash = hashStream (SHA256.Create()) ms
+            let bf = BlobField.FromStream ms
+
+            Internal.addFragmentTemplate ctx name bf hash
+        
+        member _.AddPageFragment(versionReference, template, raw: byte array, blobType: string) =
+            use ms = new MemoryStream(raw)
+            let hash = hashStream (SHA256.Create()) ms
+            let bf = BlobField.FromStream ms
+
+            Internal.addPageFragment ctx versionReference template bf hash blobType

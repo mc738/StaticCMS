@@ -5,7 +5,7 @@ open System.Text.Json.Serialization
 open Freql.Core.Common
 open Freql.Sqlite
 
-/// Module generated on 25/07/2022 18:08:36 (utc) via Freql.Sqlite.Tools.
+/// Module generated on 26/07/2022 22:48:06 (utc) via Freql.Sqlite.Tools.
 [<RequireQualifiedAccess>]
 module Records =
     /// A record representing a row in the table `fragment_blob_type`.
@@ -33,16 +33,18 @@ module Records =
     /// A record representing a row in the table `fragment_templates`.
     type FragmentTemplate =
         { [<JsonPropertyName("name")>] Name: string
-          [<JsonPropertyName("template")>] Template: BlobField }
+          [<JsonPropertyName("template")>] Template: BlobField
+          [<JsonPropertyName("hash")>] Hash: string }
     
         static member Blank() =
             { Name = String.Empty
-              Template = BlobField.Empty() }
+              Template = BlobField.Empty()
+              Hash = String.Empty }
     
         static member CreateTableSql() = """
         CREATE TABLE fragment_templates (
 	name TEXT NOT NULL,
-	template BLOB NOT NULL,
+	template BLOB NOT NULL, hash TEXT NOT NULL,
 	CONSTRAINT fragment_templates_PK PRIMARY KEY (name)
 )
         """
@@ -50,7 +52,8 @@ module Records =
         static member SelectSql() = """
         SELECT
               name,
-              template
+              template,
+              hash
         FROM fragment_templates
         """
     
@@ -104,7 +107,6 @@ module Records =
           [<JsonPropertyName("version")>] Version: int
           [<JsonPropertyName("isDraft")>] IsDraft: bool
           [<JsonPropertyName("template")>] Template: string
-          [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
           [<JsonPropertyName("createdOn")>] CreatedOn: DateTime }
     
         static member Blank() =
@@ -113,19 +115,17 @@ module Records =
               Version = 0
               IsDraft = true
               Template = String.Empty
-              RawBlob = BlobField.Empty()
               CreatedOn = DateTime.UtcNow }
     
         static member CreateTableSql() = """
         CREATE TABLE page_versions (
 	reference TEXT NOT NULL,
-    page_reference TEXT NOT NULL,
+	page_reference TEXT NOT NULL,
 	version INTEGER NOT NULL,
 	is_draft INTEGER NOT NULL,
 	template TEXT NOT NULL,
-	raw_blob BLOB NOT NULL, created_on TEXT NOT NULL,
+	created_on TEXT NOT NULL,
 	CONSTRAINT page_versions_PK PRIMARY KEY (reference),
-	CONSTRAINT page_versions_UN UNIQUE (page_reference,version),
 	CONSTRAINT page_versions_FK FOREIGN KEY (page_reference) REFERENCES pages(reference),
 	CONSTRAINT page_versions_FK_1 FOREIGN KEY (template) REFERENCES templates(name)
 )
@@ -138,7 +138,6 @@ module Records =
               version,
               is_draft,
               template,
-              raw_blob,
               created_on
         FROM page_versions
         """
@@ -432,7 +431,7 @@ module Records =
         static member TableName() = "templates"
     
 
-/// Module generated on 25/07/2022 18:08:36 (utc) via Freql.Tools.
+/// Module generated on 26/07/2022 22:48:06 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Parameters =
     /// A record representing a new row in the table `fragment_blob_type`.
@@ -446,11 +445,13 @@ module Parameters =
     /// A record representing a new row in the table `fragment_templates`.
     type NewFragmentTemplate =
         { [<JsonPropertyName("name")>] Name: string
-          [<JsonPropertyName("template")>] Template: BlobField }
+          [<JsonPropertyName("template")>] Template: BlobField
+          [<JsonPropertyName("hash")>] Hash: string }
     
         static member Blank() =
             { Name = String.Empty
-              Template = BlobField.Empty() }
+              Template = BlobField.Empty()
+              Hash = String.Empty }
     
     
     /// A record representing a new row in the table `page_fragments`.
@@ -476,7 +477,6 @@ module Parameters =
           [<JsonPropertyName("version")>] Version: int
           [<JsonPropertyName("isDraft")>] IsDraft: bool
           [<JsonPropertyName("template")>] Template: string
-          [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
           [<JsonPropertyName("createdOn")>] CreatedOn: DateTime }
     
         static member Blank() =
@@ -485,7 +485,6 @@ module Parameters =
               Version = 0
               IsDraft = true
               Template = String.Empty
-              RawBlob = BlobField.Empty()
               CreatedOn = DateTime.UtcNow }
     
     
@@ -603,7 +602,7 @@ module Parameters =
               Hash = String.Empty }
     
     
-/// Module generated on 25/07/2022 18:08:36 (utc) via Freql.Tools.
+/// Module generated on 26/07/2022 22:48:06 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Operations =
 

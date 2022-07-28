@@ -17,6 +17,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FDOM.Core", "..\FDOM\FDOM.C
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FDOM.Rendering.Html", "..\FDOM\FDOM.Rendering.Html\FDOM.Rendering.Html.fsproj", "{BEB6A272-2CF2-4260-89DA-782BA0E1017A}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "StaticCMS.App", "StaticCMS.App\StaticCMS.App.fsproj", "{6B7FA09A-4A09-4294-809A-9CDCA45E773A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -43,6 +45,10 @@ Global
 		{BEB6A272-2CF2-4260-89DA-782BA0E1017A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{BEB6A272-2CF2-4260-89DA-782BA0E1017A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BEB6A272-2CF2-4260-89DA-782BA0E1017A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6B7FA09A-4A09-4294-809A-9CDCA45E773A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6B7FA09A-4A09-4294-809A-9CDCA45E773A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6B7FA09A-4A09-4294-809A-9CDCA45E773A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6B7FA09A-4A09-4294-809A-9CDCA45E773A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C93C2DB2-83B4-4DBC-90C6-E4BAD4807557} = {8512432C-0795-4D2C-96FC-03D171F8A674}
