@@ -25,10 +25,10 @@ module PageRenderer =
             match fragment.BlobType with
             | "json" ->
                 Some
-                <| (ft.Name, PageFragments.renderJsonFragment template raw |> Mustache.Value.Scalar)
+                <| (fragment.DataName, PageFragments.renderJsonFragment template raw |> Mustache.Value.Scalar)
             | "markdown" ->
                 Some
-                <| (ft.Name, PageFragments.renderMarkdownFragment PageFragments.rewriteTitles raw |> Mustache.Value.Scalar)
+                <| (fragment.DataName, PageFragments.renderMarkdownFragment PageFragments.rewriteTitles raw |> Mustache.Value.Scalar)
             | _ -> None)
 
     let run (store: StaticStore) (site: string) (page: string) =

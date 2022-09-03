@@ -12,7 +12,6 @@ module Routes =
     open Microsoft.Extensions.Logging
     open Giraffe
 
-
     module Utils =
 
         let errorHandler (logger: ILogger) name code message =
@@ -305,22 +304,24 @@ module Routes =
 
                     let get key = Utils.tryGetFormValue ctx key
 
-                    match get "versionref", get "template", get "blobtype" with
-                    | Some vr, Some t, Some bt ->
+                    match get "versionref", get "template", get "dataname", get "blobtype" with
+                    | Some vr, Some t, Some dn, Some bt ->
                         use s =
                             log.BeginScope("Adding page fragment")
 
                         log.LogInformation($"Version ref: {vr}")
                         log.LogInformation($"Template: {t}")
+                        log.LogInformation($"Data name: {dn}")
                         log.LogInformation($"Blob type: {bt}")
 
-                        match service.AddPageFragment(vr, t, form.Files.[0].OpenReadStream(), bt) with
+                        match service.AddPageFragment(vr, t, dn, form.Files.[0].OpenReadStream(), bt) with
                         | Ok _ -> return text "Page fragment saved." next ctx
                         | Error e ->
                             return (Utils.errorHandler log name 400 $"Error while processing the request: {e}") next ctx
-                    | None, _, _ -> return (Utils.errorHandler log name 400 "Missing `versionref` parameter.") next ctx
-                    | _, None, _ -> return (Utils.errorHandler log name 400 "Missing `template` parameter.") next ctx
-                    | _, _, None -> return (Utils.errorHandler log name 400 "Missing `blobtype` parameter.") next ctx
+                    | None, _, _, _ -> return (Utils.errorHandler log name 400 "Missing `versionref` parameter.") next ctx
+                    | _, None, _, _ -> return (Utils.errorHandler log name 400 "Missing `template` parameter.") next ctx
+                    | _, _, None, _ -> return (Utils.errorHandler log name 400 "Missing `dataname` parameter.") next ctx
+                    | _, _, _, None -> return (Utils.errorHandler log name 400 "Missing `blobtype` parameter.") next ctx
                 }
                 |> Async.RunSynchronously
 

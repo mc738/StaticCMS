@@ -29,7 +29,8 @@ module DataStore =
               Records.RenderedPage.CreateTableSql()
               Records.Resource.CreateTableSql()
               Records.SitePlugin.CreateTableSql()
-              Records.PageFragment.CreateTableSql() ]
+              Records.PageFragment.CreateTableSql()
+              Records.PluginResources.CreateTableSql() ]
             |> List.map ctx.ExecuteSqlNonQuery
             |> ignore
 
@@ -38,7 +39,8 @@ module DataStore =
               ({ Name = "jpg" }: Parameters.NewResourceType)
               ({ Name = "svg" }: Parameters.NewResourceType)
               ({ Name = "css" }: Parameters.NewResourceType)
-              ({ Name = "js" }: Parameters.NewResourceType) ]
+              ({ Name = "js" }: Parameters.NewResourceType)
+              ({ Name = "mustache" }: Parameters.NewResourceType) ]
             |> List.iter (Operations.insertResourceType ctx)
 
             [ ({ Name = "markdown" }: Parameters.NewFragmentBlobType)
@@ -118,9 +120,10 @@ module DataStore =
                CreatedOn = DateTime.UtcNow }: Parameters.NewPageVersion)
             |> Operations.insertPageVersion ctx
 
-        let addPageFragment (ctx: SqliteContext) versionReference template raw hash blobType =
+        let addPageFragment (ctx: SqliteContext) versionReference template dataName raw hash blobType =
             ({ VersionReference = versionReference
                Template = template
+               DataName = dataName
                RawBlob = raw
                Hash = hash
                BlobType = blobType }: Parameters.NewPageFragment)
@@ -137,7 +140,13 @@ module DataStore =
 
         let getFragmentTemplate (ctx: SqliteContext) (name: string) =
             Operations.selectFragmentTemplateRecord ctx [ "WHERE name = @0;" ] [ name ]
-
+            
+        let getPluginResource (ctx: SqliteContext) (plugin: string) (name: string) =
+            Operations.selectPluginResourcesRecord ctx [ "WHERE plugin = @0 AND name = @1" ] [ plugin; name ]
+            
+        let getSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) =
+            Operations.selectSitePluginRecord ctx [ "WHERE site = @0 AND plugin = @1" ] [ site; plugin ]
+            
     type StaticStore(ctx: SqliteContext) =
 
         static member Create(path) = Internal.initialize path |> StaticStore
@@ -194,9 +203,25 @@ module DataStore =
 
             Internal.addFragmentTemplate ctx name bf hash
         
-        member _.AddPageFragment(versionReference, template, raw: byte array, blobType: string) =
+        member _.AddPageFragment(versionReference, template, dataName, raw: byte array, blobType: string) =
             use ms = new MemoryStream(raw)
             let hash = hashStream (SHA256.Create()) ms
             let bf = BlobField.FromStream ms
 
-            Internal.addPageFragment ctx versionReference template bf hash blobType
+            Internal.addPageFragment ctx versionReference template dataName bf hash blobType
+            
+            
+    type StaticStoreReader(ctx: SqliteContext) =
+        
+        static member Open(path: string) =
+            SqliteContext.Open path |> StaticStoreReader
+            
+        member _.GetSitePluginConfiguration(site, plugin) =
+            Internal.getSitePlugin ctx site plugin
+            |> Option.map (fun sp -> sp.Configuration.ToBytes() |> Encoding.UTF8.GetString)
+            
+            
+        member _.GetPluginResource(plugin, name) =
+            Internal.getPluginResource ctx plugin name
+            |> Option.map (fun pr -> pr.RawBlob.ToBytes())
+            

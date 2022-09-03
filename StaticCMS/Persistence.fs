@@ -5,7 +5,7 @@ open System.Text.Json.Serialization
 open Freql.Core.Common
 open Freql.Sqlite
 
-/// Module generated on 26/07/2022 22:48:06 (utc) via Freql.Sqlite.Tools.
+/// Module generated on 28/07/2022 20:51:08 (utc) via Freql.Sqlite.Tools.
 [<RequireQualifiedAccess>]
 module Records =
     /// A record representing a row in the table `fragment_blob_type`.
@@ -63,6 +63,7 @@ module Records =
     type PageFragment =
         { [<JsonPropertyName("versionReference")>] VersionReference: string
           [<JsonPropertyName("template")>] Template: string
+          [<JsonPropertyName("dataName")>] DataName: string
           [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
           [<JsonPropertyName("hash")>] Hash: string
           [<JsonPropertyName("blobType")>] BlobType: string }
@@ -70,6 +71,7 @@ module Records =
         static member Blank() =
             { VersionReference = String.Empty
               Template = String.Empty
+              DataName = String.Empty
               RawBlob = BlobField.Empty()
               Hash = String.Empty
               BlobType = String.Empty }
@@ -78,6 +80,7 @@ module Records =
         CREATE TABLE page_fragments (
 	version_reference TEXT NOT NULL,
 	template TEXT NOT NULL,
+	data_name TEXT NOT NULL,
 	raw_blob BLOB NOT NULL,
 	hash TEXT NOT NULL,
 	blob_type TEXT NOT NULL,
@@ -92,6 +95,7 @@ module Records =
         SELECT
               version_reference,
               template,
+              data_name,
               raw_blob,
               hash,
               blob_type
@@ -179,6 +183,46 @@ module Records =
         """
     
         static member TableName() = "pages"
+    
+    /// A record representing a row in the table `plugin_resources`.
+    type PluginResources =
+        { [<JsonPropertyName("name")>] Name: string
+          [<JsonPropertyName("plugin")>] Plugin: string
+          [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
+          [<JsonPropertyName("hash")>] Hash: string
+          [<JsonPropertyName("resourceType")>] ResourceType: string }
+    
+        static member Blank() =
+            { Name = String.Empty
+              Plugin = String.Empty
+              RawBlob = BlobField.Empty()
+              Hash = String.Empty
+              ResourceType = String.Empty }
+    
+        static member CreateTableSql() = """
+        CREATE TABLE plugin_resources (
+	name TEXT NOT NULL,
+	plugin TEXT NOT NULL,
+	raw_blob BLOB NOT NULL,
+	hash TEXT NOT NULL,
+	resource_type TEXT NOT NULL,
+	CONSTRAINT plugin_resources_PK PRIMARY KEY (name,plugin),
+	CONSTRAINT plugin_resources_FK FOREIGN KEY (plugin) REFERENCES plugins(name),
+	CONSTRAINT plugin_resources_FK_1 FOREIGN KEY (resource_type) REFERENCES resource_types(name)
+)
+        """
+    
+        static member SelectSql() = """
+        SELECT
+              name,
+              plugin,
+              raw_blob,
+              hash,
+              resource_type
+        FROM plugin_resources
+        """
+    
+        static member TableName() = "plugin_resources"
     
     /// A record representing a row in the table `plugin_types`.
     type PluginType =
@@ -431,7 +475,7 @@ module Records =
         static member TableName() = "templates"
     
 
-/// Module generated on 26/07/2022 22:48:06 (utc) via Freql.Tools.
+/// Module generated on 28/07/2022 20:51:08 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Parameters =
     /// A record representing a new row in the table `fragment_blob_type`.
@@ -458,6 +502,7 @@ module Parameters =
     type NewPageFragment =
         { [<JsonPropertyName("versionReference")>] VersionReference: string
           [<JsonPropertyName("template")>] Template: string
+          [<JsonPropertyName("dataName")>] DataName: string
           [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
           [<JsonPropertyName("hash")>] Hash: string
           [<JsonPropertyName("blobType")>] BlobType: string }
@@ -465,6 +510,7 @@ module Parameters =
         static member Blank() =
             { VersionReference = String.Empty
               Template = String.Empty
+              DataName = String.Empty
               RawBlob = BlobField.Empty()
               Hash = String.Empty
               BlobType = String.Empty }
@@ -500,6 +546,22 @@ module Parameters =
               Site = String.Empty
               Name = String.Empty
               NameSlug = String.Empty }
+    
+    
+    /// A record representing a new row in the table `plugin_resources`.
+    type NewPluginResources =
+        { [<JsonPropertyName("name")>] Name: string
+          [<JsonPropertyName("plugin")>] Plugin: string
+          [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
+          [<JsonPropertyName("hash")>] Hash: string
+          [<JsonPropertyName("resourceType")>] ResourceType: string }
+    
+        static member Blank() =
+            { Name = String.Empty
+              Plugin = String.Empty
+              RawBlob = BlobField.Empty()
+              Hash = String.Empty
+              ResourceType = String.Empty }
     
     
     /// A record representing a new row in the table `plugin_types`.
@@ -602,7 +664,7 @@ module Parameters =
               Hash = String.Empty }
     
     
-/// Module generated on 26/07/2022 22:48:06 (utc) via Freql.Tools.
+/// Module generated on 28/07/2022 20:51:08 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Operations =
 
@@ -727,6 +789,30 @@ module Operations =
     
     let insertPage (context: SqliteContext) (parameters: Parameters.NewPage) =
         context.Insert("pages", parameters)
+    
+    /// Select a `Records.PluginResources` from the table `plugin_resources`.
+    /// Internally this calls `context.SelectSingleAnon<Records.PluginResources>` and uses Records.PluginResources.SelectSql().
+    /// The caller can provide extra string lines to create a query and boxed parameters.
+    /// It is up to the caller to verify the sql and parameters are correct,
+    /// this should be considered an internal function (not exposed in public APIs).
+    /// Parameters are assigned names based on their order in 0 indexed array. For example: @0,@1,@2...
+    /// Example: selectPluginResourcesRecord ctx "WHERE `field` = @0" [ box `value` ]
+    let selectPluginResourcesRecord (context: SqliteContext) (query: string list) (parameters: obj list) =
+        let sql = [ Records.PluginResources.SelectSql() ] @ query |> buildSql
+        context.SelectSingleAnon<Records.PluginResources>(sql, parameters)
+    
+    /// Internally this calls `context.SelectAnon<Records.PluginResources>` and uses Records.PluginResources.SelectSql().
+    /// The caller can provide extra string lines to create a query and boxed parameters.
+    /// It is up to the caller to verify the sql and parameters are correct,
+    /// this should be considered an internal function (not exposed in public APIs).
+    /// Parameters are assigned names based on their order in 0 indexed array. For example: @0,@1,@2...
+    /// Example: selectPluginResourcesRecords ctx "WHERE `field` = @0" [ box `value` ]
+    let selectPluginResourcesRecords (context: SqliteContext) (query: string list) (parameters: obj list) =
+        let sql = [ Records.PluginResources.SelectSql() ] @ query |> buildSql
+        context.SelectAnon<Records.PluginResources>(sql, parameters)
+    
+    let insertPluginResources (context: SqliteContext) (parameters: Parameters.NewPluginResources) =
+        context.Insert("plugin_resources", parameters)
     
     /// Select a `Records.PluginType` from the table `plugin_types`.
     /// Internally this calls `context.SelectSingleAnon<Records.PluginType>` and uses Records.PluginType.SelectSql().

@@ -20,7 +20,7 @@ module Services =
             | AddSite of Name: string * Url: string * RootPath: string
             | AddPage of Reference: string * Site: string * Name: string * NameSlug: string
             | AddTemplate of Name: string * Raw: Stream
-            | AddPageFragment of VersionRef: string * Template: string * Raw: Stream * BlobType: string
+            | AddPageFragment of VersionRef: string * Template: string * DataName: string * Raw: Stream * BlobType: string
             | AddFragmentTemplate of Name: string * Raw: Stream
             | AddPageVersion of Reference: string * Site: string * Page: string * Template: string * IsDraft: bool
             | RenderPage of Site: string * Page: string
@@ -67,10 +67,10 @@ module Services =
                                 message.Reply Added
 
 
-                            | AddPageFragment (versionRef, template, stream, blobType) ->
+                            | AddPageFragment (versionRef, template, dataName, stream, blobType) ->
                                 let! raw = streamToBytes stream
 
-                                store.AddPageFragment(versionRef, template, raw, blobType)
+                                store.AddPageFragment(versionRef, template, dataName, raw, blobType)
 
                                 message.Reply AgentResult.Added
 
@@ -160,11 +160,11 @@ module Services =
 
             result.ToResult()
 
-        member _.AddPageFragment(versionReference, template, stream, blobType) =
+        member _.AddPageFragment(versionReference, template, dataName, stream, blobType) =
 
             let result =
                 agent.PostAndReply (fun rc ->
-                    { Request = AgentRequest.AddPageFragment(versionReference, template, stream, blobType)
+                    { Request = AgentRequest.AddPageFragment(versionReference, template, dataName, stream, blobType)
                       ReplyChannel = Some rc })
 
             result.ToResult()

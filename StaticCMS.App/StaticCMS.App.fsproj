@@ -16,6 +16,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <ProjectReference Include="..\..\Wikd\Wikd\Wikd.fsproj" />
       <ProjectReference Include="..\StaticCMS\StaticCMS.fsproj" />
     </ItemGroup>
 

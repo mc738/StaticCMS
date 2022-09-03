@@ -142,9 +142,13 @@ let main argv =
         [ Actions.writeToConsole
           Actions.writeToStore store ]
 
+    let metricsDir = Path.Combine(dataPath, "metrics")
+    
+    if Directory.Exists metricsDir |> not then Directory.CreateDirectory metricsDir |> ignore
+    
     let monitoringCfg =
         Monitoring.DataStores.Sqlite.Store.config
-        <| SqliteContext.Create(Path.Combine(store.Path, $"metrics_{runId}.db"))
+        <| SqliteContext.Create(Path.Combine(metricsDir, $"metrics_{runId}.db"))
 
     monitoringCfg.MetricsInitialization()
 
