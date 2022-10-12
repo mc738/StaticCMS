@@ -28,9 +28,14 @@ module PageFragments =
         |> List.map rewriter
         |> FDOM.Rendering.Html.renderFromBlocks
 
+    let passThru (str: string) = str
+    
     let renderInline (str: string) =
         FDOM.Core.Parsing.InlineParser.parseInlineContent str
         |> FDOM.Rendering.Html.renderInlineItems
+        // Here to handle cases where the input has already been html encoded.
+        // This possibly could be handled better.
+        |> System.Web.HttpUtility.HtmlDecode
     
     let rec elementToValue (element: JsonElement) =
         match element.ValueKind with

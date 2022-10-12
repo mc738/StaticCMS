@@ -66,7 +66,6 @@ module Services =
                                 store.AddTemplate(name, raw)
                                 message.Reply Added
 
-
                             | AddPageFragment (versionRef, template, dataName, stream, blobType) ->
                                 let! raw = streamToBytes stream
 

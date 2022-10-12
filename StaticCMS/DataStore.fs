@@ -140,13 +140,28 @@ module DataStore =
 
         let getFragmentTemplate (ctx: SqliteContext) (name: string) =
             Operations.selectFragmentTemplateRecord ctx [ "WHERE name = @0;" ] [ name ]
-            
+
+        let addPlugin (ctx: SqliteContext) (name: string) (pluginType: string) =
+            ({ Name = name; PluginType = pluginType }: Parameters.NewPlugin)
+            |> Operations.insertPlugin ctx
+
+        let addSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) (config: BlobField) =
+            ({ Site = site
+               Plugin = plugin
+               Configuration = config }: Parameters.NewSitePlugin)
+            |> Operations.insertSitePlugin ctx
+
         let getPluginResource (ctx: SqliteContext) (plugin: string) (name: string) =
             Operations.selectPluginResourcesRecord ctx [ "WHERE plugin = @0 AND name = @1" ] [ plugin; name ]
-            
+
         let getSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) =
             Operations.selectSitePluginRecord ctx [ "WHERE site = @0 AND plugin = @1" ] [ site; plugin ]
             
+        let addPluginType (ctx: SqliteContext) (name: string) =
+            ({ Name = name }: Parameters.NewPluginType )
+            |> Operations.insertPluginType ctx
+            
+
     type StaticStore(ctx: SqliteContext) =
 
         static member Create(path) = Internal.initialize path |> StaticStore
@@ -154,12 +169,12 @@ module DataStore =
         member _.AddSite(name, url, rootPath) = Internal.addSite ctx name url rootPath
 
         member _.GetSite(name) = Internal.getSiteByName ctx name
-        
+
         member _.AddPage(reference, site, name, nameSlug) =
             Internal.addPage ctx reference site name nameSlug
 
         member _.GetPage(site, name) = Internal.getPageByName ctx site name
-        
+
         member _.AddTemplate(name: string, raw: byte array) =
             use ms = new MemoryStream(raw)
             let hash = hashStream (SHA256.Create()) ms
@@ -202,26 +217,51 @@ module DataStore =
             let bf = BlobField.FromStream ms
 
             Internal.addFragmentTemplate ctx name bf hash
-        
+
         member _.AddPageFragment(versionReference, template, dataName, raw: byte array, blobType: string) =
             use ms = new MemoryStream(raw)
             let hash = hashStream (SHA256.Create()) ms
             let bf = BlobField.FromStream ms
 
             Internal.addPageFragment ctx versionReference template dataName bf hash blobType
-            
-            
-    type StaticStoreReader(ctx: SqliteContext) =
+
+        member _.AddPluginType(name) = Internal.addPluginType ctx name
         
-        static member Open(path: string) =
-            SqliteContext.Open path |> StaticStoreReader
-            
+        member _.AddPlugin(name, pluginType) = Internal.addPlugin ctx name pluginType
+
+        member _.AddSitePlugin(site, plugin, configuration: string) =
+            use ms =
+                new MemoryStream(configuration |> Encoding.UTF8.GetBytes)
+
+            //let hash = hashStream (SHA256.Create()) ms
+            let bf = BlobField.FromStream ms
+
+            Internal.addSitePlugin ctx site plugin bf
+
         member _.GetSitePluginConfiguration(site, plugin) =
             Internal.getSitePlugin ctx site plugin
-            |> Option.map (fun sp -> sp.Configuration.ToBytes() |> Encoding.UTF8.GetString)
-            
-            
+            |> Option.map (fun sp ->
+                sp.Configuration.ToBytes()
+                |> Encoding.UTF8.GetString)
+
+
         member _.GetPluginResource(plugin, name) =
             Internal.getPluginResource ctx plugin name
             |> Option.map (fun pr -> pr.RawBlob.ToBytes())
-            
+
+
+
+    type StaticStoreReader(ctx: SqliteContext) =
+
+        static member Open(path: string) =
+            SqliteContext.Open path |> StaticStoreReader
+
+        member _.GetSitePluginConfiguration(site, plugin) =
+            Internal.getSitePlugin ctx site plugin
+            |> Option.map (fun sp ->
+                sp.Configuration.ToBytes()
+                |> Encoding.UTF8.GetString)
+
+        member _.GetPluginResource(plugin, name) =
+            Internal.getPluginResource ctx plugin name
+            |> Option.map (fun pr -> pr.RawBlob.ToBytes())
