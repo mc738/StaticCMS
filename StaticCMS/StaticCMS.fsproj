@@ -13,6 +13,8 @@
         <Compile Include="PageFragments.fs" />
         <Compile Include="PageRenderer.fs" />
         <Compile Include="Services.fs" />
+        <Compile Include="Themes.fs" />
+        <Compile Include="Pipeline.fs" />
     </ItemGroup>
 
     <ItemGroup>
@@ -20,6 +22,7 @@
       <PackageReference Include="FDOM.Rendering.Html" Version="0.3.0" />
       <PackageReference Include="Fluff.Core" Version="0.3.0" />
       <PackageReference Include="Freql.Sqlite" Version="0.5.1" />
+      <PackageReference Include="FsToolbox" Version="0.3.3" />
     </ItemGroup>
 
     <ItemGroup>

@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Security.Cryptography
 open System.Text
+open Fipc.Messaging.Persistence
 open Freql.Core.Common.Types
 open Freql.Sqlite
 
@@ -46,6 +47,9 @@ module DataStore =
             [ ({ Name = "markdown" }: Parameters.NewFragmentBlobType)
               ({ Name = "json" }: Parameters.NewFragmentBlobType) ]
             |> List.iter (Operations.insertFragmentBlobType ctx)
+
+            [ ({ Name = "script" }: Parameters.NewPluginType) ]
+            |> List.iter (Operations.insertPluginType ctx)
 
         let initialize path =
             match File.Exists path with
@@ -129,6 +133,12 @@ module DataStore =
                BlobType = blobType }: Parameters.NewPageFragment)
             |> Operations.insertPageFragment ctx
 
+        let getPageFragment (ctx: SqliteContext) (versionReference: string) (dataName: string) =
+            Operations.selectFragmentTemplateRecord
+                ctx
+                [ "WHERE version_reference = @0 and data_name = @1" ]
+                [ versionReference; dataName ]
+
         let getPageFragments (ctx: SqliteContext) (versionReference: string) =
             Operations.selectPageFragmentRecords ctx [ "WHERE version_reference = @0;" ] [ versionReference ]
 
@@ -145,6 +155,9 @@ module DataStore =
             ({ Name = name; PluginType = pluginType }: Parameters.NewPlugin)
             |> Operations.insertPlugin ctx
 
+        let getPlugin (ctx: SqliteContext) (name: string) =
+            Operations.selectPluginRecord ctx [ "WHERE name = @0" ] [ name ]
+
         let addSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) (config: BlobField) =
             ({ Site = site
                Plugin = plugin
@@ -156,16 +169,72 @@ module DataStore =
 
         let getSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) =
             Operations.selectSitePluginRecord ctx [ "WHERE site = @0 AND plugin = @1" ] [ site; plugin ]
-            
+
         let addPluginType (ctx: SqliteContext) (name: string) =
-            ({ Name = name }: Parameters.NewPluginType )
+            ({ Name = name }: Parameters.NewPluginType)
             |> Operations.insertPluginType ctx
-            
 
-    type StaticStore(ctx: SqliteContext) =
+    type StoreOperationFailure =
+        { Message: string
+          Exception: exn option }
 
-        static member Create(path) = Internal.initialize path |> StaticStore
+    [<RequireQualifiedAccess>]
+    type AddSiteResult =
+        | Success
+        | AlreadyExists
+        | Failure of StoreOperationFailure
 
+    [<RequireQualifiedAccess>]
+    type AddPageResult =
+        | Success of Reference: string
+        | AlreadyExists of Reference: string
+        | Failure of StoreOperationFailure
+
+    [<RequireQualifiedAccess>]
+    type AddPageVersionResult =
+        | Success of Reference: string
+        | AlreadyExists of Reference: string
+        | Failure of StoreOperationFailure
+
+    [<RequireQualifiedAccess>]
+    type AddPluginResult =
+        | Success
+        | AlreadyExists
+        | Failure of StoreOperationFailure
+
+
+    [<RequireQualifiedAccess>]
+    type AddSitePluginResult =
+        | Success
+        | AlreadyExists
+        | Failure of StoreOperationFailure
+
+    [<RequireQualifiedAccess>]
+    type AddTemplateResult =
+        | Success
+        | AlreadyExists
+        | Failure of StoreOperationFailure
+        
+    type AddPageFragmentResult =
+        | Success
+        | AlreadyExists
+        | Failure of StoreOperationFailure
+
+    let attempt<'T> (fn: unit -> 'T) =
+        try
+            fn () |> Ok
+        with
+        | exn ->
+            Error
+                { Message = exn.Message
+                  Exception = Some exn }
+
+    type StaticStore(ctx: SqliteContext, path: string) =
+
+        static member Create(path) = StaticStore(Internal.initialize path, path)
+
+        member _.Path = path
+        
         member _.AddSite(name, url, rootPath) = Internal.addSite ctx name url rootPath
 
         member _.GetSite(name) = Internal.getSiteByName ctx name
@@ -198,6 +267,9 @@ module DataStore =
         member _.GetLatestPageVersion(pageReference: string) =
             Internal.getLatestPageVersion ctx pageReference
 
+        member _.GetPageFragment(versionReference: string, dataName: string) =
+            Internal.getPageFragment ctx versionReference dataName
+
         member _.GetPageFragments(versionReference: string) =
             Internal.getPageFragments ctx versionReference
 
@@ -226,8 +298,10 @@ module DataStore =
             Internal.addPageFragment ctx versionReference template dataName bf hash blobType
 
         member _.AddPluginType(name) = Internal.addPluginType ctx name
-        
+
         member _.AddPlugin(name, pluginType) = Internal.addPlugin ctx name pluginType
+
+        member _.GetPlugin(name) = Internal.getPlugin ctx name
 
         member _.AddSitePlugin(site, plugin, configuration: string) =
             use ms =
@@ -238,18 +312,91 @@ module DataStore =
 
             Internal.addSitePlugin ctx site plugin bf
 
+        member _.GetSitePlugin(site, plugin) = Internal.getSitePlugin ctx site plugin
+
         member _.GetSitePluginConfiguration(site, plugin) =
             Internal.getSitePlugin ctx site plugin
             |> Option.map (fun sp ->
                 sp.Configuration.ToBytes()
                 |> Encoding.UTF8.GetString)
 
-
         member _.GetPluginResource(plugin, name) =
             Internal.getPluginResource ctx plugin name
             |> Option.map (fun pr -> pr.RawBlob.ToBytes())
 
+        member store.TryAddSite(name, url, root) =
+            let fn _ =
+                match store.GetSite name with
+                | Some _ -> AddSiteResult.AlreadyExists
+                | None ->
+                    store.AddSite(name, url, root)
+                    AddSiteResult.Success
 
+            match attempt fn with
+            | Ok r -> r
+            | Error e -> AddSiteResult.Failure e
+
+
+        member store.AddPage(site, name, nameSlug) =
+            let fn _ =
+                match store.GetPage(site, name) with
+                | Some p -> AddPageResult.AlreadyExists p.Reference
+                | None ->
+                    let ref = Internal.newReference ()
+                    store.AddPage(ref, site, name, nameSlug)
+                    AddPageResult.Success ref
+
+            match attempt fn with
+            | Ok r -> r
+            | Error e -> AddPageResult.Failure e
+
+        member store.TryAddPlugin(name, pluginType) =
+            let fn _ =
+                match store.GetPlugin name with
+                | Some _ -> AddPluginResult.AlreadyExists
+                | None ->
+                    store.AddPlugin(name, pluginType)
+                    AddPluginResult.Success
+
+            match attempt fn with
+            | Ok r -> r
+            | Error e -> AddPluginResult.Failure e
+
+        member store.TryAddSitePlugin(site, name, configuration) =
+            let fn _ =
+                match store.GetSitePlugin(site, name) with
+                | Some _ -> AddSitePluginResult.AlreadyExists
+                | None ->
+                    store.AddSitePlugin(site, name, configuration)
+                    AddSitePluginResult.Success
+
+            match attempt fn with
+            | Ok r -> r
+            | Error e -> AddSitePluginResult.Failure e
+
+        member store.TryAddTemplate(name, template) =
+            let fn _ =
+                match store.GetTemplate(name) with
+                | Some _ -> AddTemplateResult.AlreadyExists
+                | None ->
+                    store.AddTemplate(name, template)
+                    AddTemplateResult.Success
+
+            match attempt fn with
+            | Ok r -> r
+            | Error e -> AddTemplateResult.Failure e
+
+        member store.TryAddPageFragment(versionReference, template, dataName, data, blobType) =
+            let fn _ =
+                match store.GetPageFragment(versionReference, dataName) with
+                | Some _ -> AddPageFragmentResult.AlreadyExists
+                | None ->
+                    store.AddPageFragment(versionReference, template, dataName, data, blobType)
+                    AddPageFragmentResult.Success
+                    
+            match attempt fn with
+            | Ok r -> r
+            | Error e -> AddPageFragmentResult.Failure e
 
     type StaticStoreReader(ctx: SqliteContext) =
 

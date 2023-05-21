@@ -1,0 +1,402 @@
+﻿namespace StaticCMS
+
+open System
+open System.IO
+open System.Text.Json
+open Faaz
+open Faaz.ScriptHost
+open FsToolbox.Core
+open StaticCMS.DataStore
+
+module Pipeline =
+
+    let toPathParts (str: string) = str.Split([| '\\'; '/' |])
+
+    let collectErrors (results: Result<'T, string> list) =
+        results
+        |> List.fold
+            (fun (acc, errors) r ->
+                match r with
+                | Ok v -> acc @ [ v ], errors
+                | Error e -> acc, errors @ [ e ])
+            ([], [])
+        |> fun (acc, errors) ->
+            match errors.IsEmpty with
+            | true -> Ok acc
+            | false ->
+                "The following errors occurred:" :: errors
+                |> String.concat Environment.NewLine
+                |> Error
+
+    let collectResults (results: Result<'T, string> list) =
+        results
+        |> List.fold
+            (fun (acc, errors) r ->
+                match r with
+                | Ok v -> acc @ [ v ], errors
+                | Error e -> acc, errors @ [ e ])
+            ([], [])
+
+    let collectResults1 (results: Result<'T, string> list) =
+        results
+        |> collectResults
+        |> fun (acc, errors) ->
+            match errors.IsEmpty with
+            | true -> Ok acc
+            | false ->
+                [ "The following errors occurred:"
+                  yield! errors ]
+                |> String.concat Environment.NewLine
+                |> Error
+
+    let collectResults2<'T1, 'T2> (resultsA: Result<'T1, string> list, resultsB: Result<'T2, string> list) =
+        let (acc1, errors1) =
+            resultsA |> collectResults
+
+        let (acc2, errors2) =
+            resultsB |> collectResults
+
+        match errors1.IsEmpty && errors2.IsEmpty with
+        | true -> Ok(acc1, acc2)
+        | false ->
+            [ "The following errors occurred:"
+              yield! errors1
+              yield! errors2 ]
+            |> String.concat Environment.NewLine
+            |> Error
+
+    let bind2Results<'T1, 'T2, 'U, 'E> (fn: 'T1 -> 'T2 -> Result<'U, 'E>) (r1: Result<'T1, 'E>, r2: Result<'T2, 'E>) =
+        match r1, r2 with
+        | Ok v1, Ok v2 -> fn v1 v2
+        | Error e1, _ -> Error e1
+        | _, Error e2 -> Error e2
+
+    type PipelineConfiguration =
+        { Site: string
+          Steps: StepType list }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "site" el, Json.tryGetArrayProperty "steps" el with
+            | Some site, Some steps ->
+                steps
+                |> List.map StepType.Deserialize
+                |> collectResults
+                |> fun (steps, errors) ->
+                    match errors.IsEmpty with
+                    | true -> Ok { Site = site; Steps = steps }
+                    | false -> Error errors
+            | None, _ -> Error [ "Missing `site` property." ]
+            | _, None -> Error [ "Missing `steps` property." ]
+
+    and StepType =
+        | CreateDirectories of CreateDirectoriesAction
+        | CopyResources of CopyResourcesAction
+        | BuildPage of BuildPageAction
+        | RunPluginScript of RunPluginScriptAction
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "type" el with
+            | Some "create-directories" ->
+                match Json.tryGetProperty "directories" el with
+                | Some dirs ->
+                    CreateDirectoriesAction.Deserialize dirs
+                    |> Result.map StepType.CreateDirectories
+                | None -> Error "create-directories: Missing `directories` property."
+            | Some "copy-resources" ->
+                CopyResourcesAction.Deserialize el
+                |> Result.map StepType.CopyResources
+            | Some "build-page" ->
+                BuildPageAction.Deserialize el
+                |> Result.map StepType.BuildPage
+            | Some "run-plugin-script" ->
+                RunPluginScriptAction.Deserialize el
+                |> Result.map StepType.RunPluginScript
+            | Some t -> Error $"Unknown step type `{t}`."
+            | None -> Error "Missing `type` property."
+
+    and CreateDirectoriesAction =
+        { Directories: string list }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringArray el with
+            | Some dirs -> Ok { Directories = dirs }
+            | None -> Error "Could not get string array."
+
+    and CopyResourcesAction =
+        { Directories: CopyDirectory list
+          Files: CopyFile list }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetArrayProperty "directories" el, Json.tryGetArrayProperty "files" el with
+            | Some ds, Some fs ->
+                (ds |> List.map CopyDirectory.Deserialize, fs |> List.map CopyFile.Deserialize)
+                |> collectResults2
+                |> Result.bind (fun (ds, fs) -> Ok { Directories = ds; Files = fs })
+            | None, _ -> Error "Missing `directories` property."
+            | _, None -> Error "Missing `files` property."
+
+    and CopyDirectory =
+        { From: string
+          To: string }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "from" el, Json.tryGetStringProperty "to" el with
+            | Some f, Some t -> Ok { From = f; To = t }
+            | None, _ -> Error "Copy directory element missing `from` property."
+            | _, None -> Error "Copy directory element missing `to` property."
+
+    and CopyFile =
+        { From: string
+          To: string }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "from" el, Json.tryGetStringProperty "to" el with
+            | Some f, Some t -> Ok { From = f; To = t }
+            | None, _ -> Error "Copy file element missing `from` property."
+            | _, None -> Error "Copy file element missing `to` property."
+
+    and BuildPageAction =
+        { Name: string
+          Template: string
+          Steps: BuildPageStep list }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "name" el,
+                  Json.tryGetStringProperty "template" el,
+                  Json.tryGetArrayProperty "steps" el
+                with
+            | Some name, Some template, Some steps ->
+                steps
+                |> List.map BuildPageStep.Deserialize
+                |> collectResults1
+                |> Result.map (fun s ->
+                    { Name = name
+                      Template = template
+                      Steps = s })
+            | None, _, _ -> Error "Missing `name` property."
+            | _, None, _ -> Error "Missing `template` property."
+            | _, _, None -> Error "Missing `steps` property."
+
+    and BuildPageStep =
+        | AddPageFragment of AddPageFragmentPageBuildStep
+        //| RunPlugin
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "type" el with
+            | Some "add-page-fragment" ->
+                AddPageFragmentPageBuildStep.Deserialize el
+                |> Result.map BuildPageStep.AddPageFragment
+            //| Some "run-plugin" -> Ok()
+            | Some t -> Error $"Unknown step type `{t}`."
+            | None -> Error "Missing `type` property."
+
+    and AddPageFragmentPageBuildStep =
+        { Path: string
+          Fragment: FragmentActionData }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "path" el, Json.tryGetProperty "fragment" el with
+            | Some path, Some fragmentEl ->
+                FragmentActionData.Deserialize fragmentEl
+                |> Result.map (fun fd -> { Path = path; Fragment = fd })
+            | None, _ -> Error "Missing `path` property."
+            | _, None -> Error "Missing `fragment` property."
+
+    and RunPluginScriptAction =
+        { Name: string
+          Script: string
+          Function: string
+          OutputType: string
+          OutputPath: string }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "name" el,
+                  Json.tryGetStringProperty "script" el,
+                  Json.tryGetStringProperty "function" el,
+                  Json.tryGetStringProperty "outputType" el,
+                  Json.tryGetStringProperty "outputPath" el
+                with
+            | Some name, Some script, Some functionName, Some outputType, Some outputPath ->
+                Ok
+                    { Name = name
+                      Script = script
+                      Function = functionName
+                      OutputType = outputType
+                      OutputPath = outputPath }
+            | None, _, _, _, _ -> Error "Missing `name` property."
+            | _, None, _, _, _ -> Error "Missing `script` property."
+            | _, _, None, _, _ -> Error "Missing `function` property."
+            | _, _, _, None, _ -> Error "Missing `outputType` property."
+            | _, _, _, _, None -> Error "Missing `outputPath` property."
+
+    and FragmentActionData =
+        { Template: string
+          DataName: string
+          ContentType: string }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "template" el,
+                  Json.tryGetStringProperty "dataName" el,
+                  Json.tryGetStringProperty "contentType" el
+                with
+            | Some t, Some dn, Some ct ->
+                Ok
+                    { Template = t
+                      DataName = dn
+                      ContentType = ct }
+            | None, _, _ -> Error "Fragment element missing `template` property."
+            | _, None, _ -> Error "Fragment element missing `dataName` property."
+            | _, _, None -> Error "Fragment element missing `contentType` property."
+
+    type PipelineContext =
+        { Store: StaticStore
+          ScriptHost: HostContext
+          KnownPaths: Map<string, string> }
+
+        static member Create(store: StaticStore, scriptHost: HostContext, knownPaths: Map<string, string>) =
+            { Store = store
+              ScriptHost = scriptHost
+              KnownPaths = knownPaths }
+
+        member ctx.ExpandPath(path: string) =
+            let splitPath = toPathParts path
+
+            [| splitPath
+               |> Array.tryHead
+               |> Option.map (fun p -> ctx.KnownPaths.TryFind p |> Option.defaultValue p)
+               |> Option.defaultValue ""
+               yield! splitPath |> Array.tail |]
+            |> Path.Combine
+
+    let deserializeStep (el: JsonElement) =
+        match Json.tryGetStringProperty "type" el with
+        | Some "create-directories" -> Ok()
+        | Some "copy-resources" -> Ok()
+        | Some "build-page" -> Ok()
+        | Some t -> Error $"Unknown step type `{t}`."
+        | None -> Error "Missing `type` property."
+
+    let deserializeConfiguration (json: string) =
+        let el =
+            (JsonDocument.Parse json).RootElement
+
+        match Json.tryGetStringProperty "site" el, Json.tryGetArrayProperty "steps" el with
+        | Some site, Some steps -> Ok()
+        | None, _ -> Error "Missing `site` property."
+        | _, None -> Error "Missing `steps` property."
+
+    let loadConfiguration (path: string) =
+        JsonDocument
+            .Parse(
+                File.ReadAllText path
+            )
+            .RootElement
+        |> PipelineConfiguration.Deserialize
+
+    let expandPath (knownPaths: Map<string, string>) (path: string) =
+        let splitPath = toPathParts path
+
+        [| splitPath
+           |> Array.tryHead
+           |> Option.map (fun p -> knownPaths.TryFind p |> Option.defaultValue p)
+           |> Option.defaultValue ""
+           yield! splitPath |> Array.tail |]
+        |> Path.Combine
+
+    module Actions =
+
+        let private attempt (fn: unit -> Result<unit, string>) =
+            try
+                fn ()
+            with
+            | exn -> Error $"Unhandled exception: {exn.Message}"
+
+        let private createRef _ = Guid.NewGuid().ToString("n")
+
+        let createDirectories (ctx: PipelineContext) (action: CreateDirectoriesAction) =
+            let fn _ =
+                action.Directories
+                |> List.iter (fun d ->
+                    let path = ctx.ExpandPath d
+
+                    match Directory.Exists d with
+                    | true -> ()
+                    | false -> Directory.CreateDirectory path |> ignore)
+                |> Ok
+
+            attempt fn
+
+        let copyResources (ctx: PipelineContext) (action: CopyResourcesAction) =
+            let fn _ =
+                action.Directories
+                |> List.iter (fun d ->
+                    let fromPath = ctx.ExpandPath d.From
+                    let toPath = ctx.ExpandPath d.To
+
+                    Directory.EnumerateFiles(fromPath)
+                    |> List.ofSeq
+                    |> List.iter (fun f -> File.Copy(f, Path.Combine(toPath, Path.GetFileName(f)))))
+
+                action.Files
+                |> List.iter (fun f -> File.Copy(ctx.ExpandPath f.From, ctx.ExpandPath f.To))
+
+                Ok()
+
+            attempt fn
+
+        let runPluginScript (site: string) (ctx: PipelineContext) (action: RunPluginScriptAction) =
+            let fn _ =
+                let scriptPath =
+                    ctx.ExpandPath action.Script
+
+                let runCmd =
+                    $"""{action.Function} "{ctx.Store.Path}" "{site}" """
+
+                // TODO check output type...
+                ctx.ScriptHost.Eval<string>(scriptPath, runCmd)
+                |> Result.map (fun fd -> File.WriteAllText(ctx.ExpandPath action.OutputPath, fd))
+
+            attempt fn
+
+        let buildPageStep (versionRef: string) (ctx: PipelineContext) (step: BuildPageStep) =
+            match step with
+            | BuildPageStep.AddPageFragment data ->
+                ctx.Store.AddPageFragment(
+                    versionRef,
+                    data.Fragment.Template,
+                    data.Fragment.DataName,
+                    File.ReadAllBytes <| ctx.ExpandPath data.Path,
+                    data.Fragment.ContentType
+                )
+
+        let buildPage (site: string) (ctx: PipelineContext) (action: BuildPageAction) =
+            let fn _ =
+                let versionRef = createRef ()
+
+                match ctx.Store.GetPage(site, action.Name) with
+                | Some page ->
+                    ctx.Store.AddPageVersion(page.Reference, versionRef, action.Template, false)
+
+                    action.Steps
+                    |> List.iter (buildPageStep versionRef ctx)
+                    |>  fun _ ->
+                        match PageRenderer.run ctx.Store site action.Name with
+                        | Ok p -> File.WriteAllText(Path.Combine(ctx.ExpandPath "$root/rendered", "index.html"), p) |> Ok
+                        | Error e -> Error $"Error: {e}"
+                | None -> Error $"Page `{action.Name}` not found for site `{site}`."
+
+            attempt fn
+
+
+    let run (ctx: PipelineContext) (cfg: PipelineConfiguration) =
+        cfg.Steps
+        |> List.fold
+            (fun r s ->
+                r
+                |> Result.bind (fun _ ->
+                    match s with
+                    | StepType.CreateDirectories cda -> Actions.createDirectories ctx cda
+                    | StepType.CopyResources cra -> Actions.copyResources ctx cra
+                    | StepType.RunPluginScript rpsa -> Actions.runPluginScript cfg.Site ctx rpsa
+                    | StepType.BuildPage bpa -> Actions.buildPage cfg.Site ctx bpa))
+            (Ok())

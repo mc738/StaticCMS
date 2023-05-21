@@ -63,8 +63,8 @@ let buildIndex (cfg: ArticulusConfiguration) (fragmentData: FragmentDataItem lis
         [ "items",
           fragmentData
           |> List.map (fun fd ->
-              [ "title", Mustache.Scalar fd.TitleHtml
-                "summary", Mustache.Scalar fd.SummaryHtml
+              [ "title_html", Mustache.Scalar fd.TitleHtml
+                "summary_html", Mustache.Scalar fd.SummaryHtml
                 "link", Mustache.Scalar fd.Link
                 "date",
                 Mustache.Scalar
@@ -84,7 +84,7 @@ let createFragment (fragmentData: FragmentDataItem list) =
     |> fun fd -> fd.Serialize("dd MMMM yyyy")
     //|> JsonSerializer.Serialize
         //|> fun fdj -> File.WriteAllText("C:\\ProjectData\\static_cms\\sites\\Freql\\fragments\\news.json", fdj)
-        
+     
 let run storePath site =
     let store = StaticStoreReader.Open storePath
 
