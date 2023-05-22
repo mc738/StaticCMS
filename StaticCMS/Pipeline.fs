@@ -2,6 +2,7 @@
 
 open System
 open System.IO
+open System.Text
 open System.Text.Json
 open Faaz
 open Faaz.ScriptHost
@@ -44,24 +45,19 @@ module Pipeline =
             match errors.IsEmpty with
             | true -> Ok acc
             | false ->
-                [ "The following errors occurred:"
-                  yield! errors ]
+                [ "The following errors occurred:"; yield! errors ]
                 |> String.concat Environment.NewLine
                 |> Error
 
     let collectResults2<'T1, 'T2> (resultsA: Result<'T1, string> list, resultsB: Result<'T2, string> list) =
-        let (acc1, errors1) =
-            resultsA |> collectResults
+        let (acc1, errors1) = resultsA |> collectResults
 
-        let (acc2, errors2) =
-            resultsB |> collectResults
+        let (acc2, errors2) = resultsB |> collectResults
 
         match errors1.IsEmpty && errors2.IsEmpty with
         | true -> Ok(acc1, acc2)
         | false ->
-            [ "The following errors occurred:"
-              yield! errors1
-              yield! errors2 ]
+            [ "The following errors occurred:"; yield! errors1; yield! errors2 ]
             |> String.concat Environment.NewLine
             |> Error
 
@@ -88,6 +84,24 @@ module Pipeline =
             | None, _ -> Error [ "Missing `site` property." ]
             | _, None -> Error [ "Missing `steps` property." ]
 
+        member pc.Serialize() =
+            use ms = new MemoryStream()
+            let mutable options = JsonWriterOptions()
+            options.Indented <- true
+
+            use writer = new Utf8JsonWriter(ms, options)
+
+            writer.WriteStartObject()
+
+            Json.writeString writer "site" pc.Site
+            Json.writeArray (fun w -> pc.Steps |> List.iter (fun s -> s.WriteToJson w)) "steps" writer
+
+
+            writer.WriteEndObject()
+            writer.Flush()
+
+            ms.ToArray() |> Encoding.UTF8.GetString
+
     and StepType =
         | CreateDirectories of CreateDirectoriesAction
         | CopyResources of CopyResourcesAction
@@ -102,17 +116,30 @@ module Pipeline =
                     CreateDirectoriesAction.Deserialize dirs
                     |> Result.map StepType.CreateDirectories
                 | None -> Error "create-directories: Missing `directories` property."
-            | Some "copy-resources" ->
-                CopyResourcesAction.Deserialize el
-                |> Result.map StepType.CopyResources
-            | Some "build-page" ->
-                BuildPageAction.Deserialize el
-                |> Result.map StepType.BuildPage
-            | Some "run-plugin-script" ->
-                RunPluginScriptAction.Deserialize el
-                |> Result.map StepType.RunPluginScript
+            | Some "copy-resources" -> CopyResourcesAction.Deserialize el |> Result.map StepType.CopyResources
+            | Some "build-page" -> BuildPageAction.Deserialize el |> Result.map StepType.BuildPage
+            | Some "run-plugin-script" -> RunPluginScriptAction.Deserialize el |> Result.map StepType.RunPluginScript
             | Some t -> Error $"Unknown step type `{t}`."
             | None -> Error "Missing `type` property."
+
+        member internal st.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteStartObject()
+
+            match st with
+            | StepType.CreateDirectories createDirectoriesAction ->
+                Json.writeString writer "type" "create-directories"
+                createDirectoriesAction.WriteToJson writer
+            | CopyResources copyResourcesAction ->
+                writer.WriteString("type", "copy-resources")
+                copyResourcesAction.WriteToJson writer
+            | BuildPage buildPageAction ->
+                writer.WriteString("type", "build-page")
+                buildPageAction.WriteToJson writer
+            | RunPluginScript runPluginScriptAction ->
+                writer.WriteString("type", "run-plugin-script")
+                runPluginScriptAction.WriteToJson writer
+
+            writer.WriteEndObject()
 
     and CreateDirectoriesAction =
         { Directories: string list }
@@ -121,6 +148,9 @@ module Pipeline =
             match Json.tryGetStringArray el with
             | Some dirs -> Ok { Directories = dirs }
             | None -> Error "Could not get string array."
+
+        member internal cda.WriteToJson(writer: Utf8JsonWriter) =
+            Json.writeArray (fun w -> cda.Directories |> List.iter (fun d -> w.WriteStringValue d)) "directories" writer
 
     and CopyResourcesAction =
         { Directories: CopyDirectory list
@@ -135,6 +165,10 @@ module Pipeline =
             | None, _ -> Error "Missing `directories` property."
             | _, None -> Error "Missing `files` property."
 
+        member internal cra.WriteToJson(writer: Utf8JsonWriter) =
+            Json.writeArray (fun w -> cra.Directories |> List.iter (fun cd -> cd.WriteToJson w)) "directories" writer
+            Json.writeArray (fun w -> cra.Files |> List.iter (fun cd -> cd.WriteToJson w)) "files" writer
+
     and CopyDirectory =
         { From: string
           To: string }
@@ -144,6 +178,12 @@ module Pipeline =
             | Some f, Some t -> Ok { From = f; To = t }
             | None, _ -> Error "Copy directory element missing `from` property."
             | _, None -> Error "Copy directory element missing `to` property."
+
+        member internal cd.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteStartObject()
+            writer.WriteString("from", cd.From)
+            writer.WriteString("to", cd.To)
+            writer.WriteEndObject()
 
     and CopyFile =
         { From: string
@@ -155,16 +195,24 @@ module Pipeline =
             | None, _ -> Error "Copy file element missing `from` property."
             | _, None -> Error "Copy file element missing `to` property."
 
+
+        member internal cf.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteStartObject()
+            writer.WriteString("from", cf.From)
+            writer.WriteString("to", cf.To)
+            writer.WriteEndObject()
+
     and BuildPageAction =
         { Name: string
           Template: string
           Steps: BuildPageStep list }
 
         static member Deserialize(el: JsonElement) =
-            match Json.tryGetStringProperty "name" el,
-                  Json.tryGetStringProperty "template" el,
-                  Json.tryGetArrayProperty "steps" el
-                with
+            match
+                Json.tryGetStringProperty "name" el,
+                Json.tryGetStringProperty "template" el,
+                Json.tryGetArrayProperty "steps" el
+            with
             | Some name, Some template, Some steps ->
                 steps
                 |> List.map BuildPageStep.Deserialize
@@ -176,6 +224,11 @@ module Pipeline =
             | None, _, _ -> Error "Missing `name` property."
             | _, None, _ -> Error "Missing `template` property."
             | _, _, None -> Error "Missing `steps` property."
+
+        member internal bpa.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteString("name", bpa.Name)
+            writer.WriteString("template", bpa.Template)
+            Json.writeArray (fun w -> bpa.Steps |> List.iter (fun s -> s.WriteToJson w)) "steps" writer
 
     and BuildPageStep =
         | AddPageFragment of AddPageFragmentPageBuildStep
@@ -190,6 +243,17 @@ module Pipeline =
             | Some t -> Error $"Unknown step type `{t}`."
             | None -> Error "Missing `type` property."
 
+        member internal bps.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteStartObject()
+
+            match bps with
+            | AddPageFragment addPageFragmentPageBuildStep ->
+                writer.WriteString("type", "add-page-fragment")
+                addPageFragmentPageBuildStep.WriteToJson writer
+
+            writer.WriteEndObject()
+
+
     and AddPageFragmentPageBuildStep =
         { Path: string
           Fragment: FragmentActionData }
@@ -202,6 +266,11 @@ module Pipeline =
             | None, _ -> Error "Missing `path` property."
             | _, None -> Error "Missing `fragment` property."
 
+        member internal apf.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteString("path", apf.Path)
+            writer.WritePropertyName("fragment")
+            apf.Fragment.WriteToJson writer
+
     and RunPluginScriptAction =
         { Name: string
           Script: string
@@ -210,12 +279,13 @@ module Pipeline =
           OutputPath: string }
 
         static member Deserialize(el: JsonElement) =
-            match Json.tryGetStringProperty "name" el,
-                  Json.tryGetStringProperty "script" el,
-                  Json.tryGetStringProperty "function" el,
-                  Json.tryGetStringProperty "outputType" el,
-                  Json.tryGetStringProperty "outputPath" el
-                with
+            match
+                Json.tryGetStringProperty "name" el,
+                Json.tryGetStringProperty "script" el,
+                Json.tryGetStringProperty "function" el,
+                Json.tryGetStringProperty "outputType" el,
+                Json.tryGetStringProperty "outputPath" el
+            with
             | Some name, Some script, Some functionName, Some outputType, Some outputPath ->
                 Ok
                     { Name = name
@@ -229,16 +299,24 @@ module Pipeline =
             | _, _, _, None, _ -> Error "Missing `outputType` property."
             | _, _, _, _, None -> Error "Missing `outputPath` property."
 
+        member internal apf.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteString("name", apf.Name)
+            writer.WriteString("script", apf.Script)
+            writer.WriteString("function", apf.Function)
+            writer.WriteString("outputType", apf.OutputType)
+            writer.WriteString("outputPath", apf.OutputPath)
+
     and FragmentActionData =
         { Template: string
           DataName: string
           ContentType: string }
 
         static member Deserialize(el: JsonElement) =
-            match Json.tryGetStringProperty "template" el,
-                  Json.tryGetStringProperty "dataName" el,
-                  Json.tryGetStringProperty "contentType" el
-                with
+            match
+                Json.tryGetStringProperty "template" el,
+                Json.tryGetStringProperty "dataName" el,
+                Json.tryGetStringProperty "contentType" el
+            with
             | Some t, Some dn, Some ct ->
                 Ok
                     { Template = t
@@ -247,6 +325,16 @@ module Pipeline =
             | None, _, _ -> Error "Fragment element missing `template` property."
             | _, None, _ -> Error "Fragment element missing `dataName` property."
             | _, _, None -> Error "Fragment element missing `contentType` property."
+
+        member internal apf.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteStartObject()
+
+            writer.WriteString("template", apf.Template)
+            writer.WriteString("dataName", apf.DataName)
+            writer.WriteString("contentType", apf.ContentType)
+
+            writer.WriteEndObject()
+
 
     type PipelineContext =
         { Store: StaticStore
@@ -277,8 +365,7 @@ module Pipeline =
         | None -> Error "Missing `type` property."
 
     let deserializeConfiguration (json: string) =
-        let el =
-            (JsonDocument.Parse json).RootElement
+        let el = (JsonDocument.Parse json).RootElement
 
         match Json.tryGetStringProperty "site" el, Json.tryGetArrayProperty "steps" el with
         | Some site, Some steps -> Ok()
@@ -286,11 +373,7 @@ module Pipeline =
         | _, None -> Error "Missing `steps` property."
 
     let loadConfiguration (path: string) =
-        JsonDocument
-            .Parse(
-                File.ReadAllText path
-            )
-            .RootElement
+        JsonDocument.Parse(File.ReadAllText path).RootElement
         |> PipelineConfiguration.Deserialize
 
     let expandPath (knownPaths: Map<string, string>) (path: string) =
@@ -308,8 +391,8 @@ module Pipeline =
         let private attempt (fn: unit -> Result<unit, string>) =
             try
                 fn ()
-            with
-            | exn -> Error $"Unhandled exception: {exn.Message}"
+            with exn ->
+                Error $"Unhandled exception: {exn.Message}"
 
         let private createRef _ = Guid.NewGuid().ToString("n")
 
@@ -346,11 +429,9 @@ module Pipeline =
 
         let runPluginScript (site: string) (ctx: PipelineContext) (action: RunPluginScriptAction) =
             let fn _ =
-                let scriptPath =
-                    ctx.ExpandPath action.Script
+                let scriptPath = ctx.ExpandPath action.Script
 
-                let runCmd =
-                    $"""{action.Function} "{ctx.Store.Path}" "{site}" """
+                let runCmd = $"""{action.Function} "{ctx.Store.Path}" "{site}" """
 
                 // TODO check output type...
                 ctx.ScriptHost.Eval<string>(scriptPath, runCmd)
@@ -379,9 +460,11 @@ module Pipeline =
 
                     action.Steps
                     |> List.iter (buildPageStep versionRef ctx)
-                    |>  fun _ ->
+                    |> fun _ ->
                         match PageRenderer.run ctx.Store site action.Name with
-                        | Ok p -> File.WriteAllText(Path.Combine(ctx.ExpandPath "$root/rendered", "index.html"), p) |> Ok
+                        | Ok p ->
+                            File.WriteAllText(Path.Combine(ctx.ExpandPath "$root/rendered", "index.html"), p)
+                            |> Ok
                         | Error e -> Error $"Error: {e}"
                 | None -> Error $"Page `{action.Name}` not found for site `{site}`."
 
