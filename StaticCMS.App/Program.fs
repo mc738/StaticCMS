@@ -29,7 +29,7 @@ type Options =
     | [<CommandValue("import-template")>] ImportTemplate of ImportTemplateOptions
     | [<CommandValue("render-site")>] RenderSite of RenderSiteOptions
     | [<CommandValue("add-page")>] AddPath of AddPageOptions
-    | [<CommandValue("add-fragment-template")>] AddFragmentTemplate
+    | [<CommandValue("import-fragment-template")>] ImportFragmentTemplate of ImportFragmentTemplateOptions
     | [<CommandValue("add-site-plugin")>] AddSitePlugin
     | [<CommandValue("init")>] RunInit
 
@@ -79,11 +79,13 @@ and AddPageOptions =
       [<ArgValue("-s", "--store")>]
       StorePath: string option }
 
-and ImportFragmentTemplate =
+and ImportFragmentTemplateOptions =
     { [<ArgValue("-n", "--name")>]
       Name: string
       [<ArgValue("-p", "--path")>]
-      Path: string }
+      Path: string
+      [<ArgValue("-s", "--store")>]
+      StorePath: string option }
 
 let options =
     Environment.GetCommandLineArgs()
@@ -102,7 +104,7 @@ let getGeneralSettings (path: string option) =
     |> Option.defaultWith (fun _ -> Path.Combine(getStaticRoot (), "settings.json"))
     |> fun p ->
         try
-            JsonSerializer.Deserialize<GeneralSettings> p |> Ok
+            File.ReadAllText p |> JsonSerializer.Deserialize<GeneralSettings> |> Ok
         with exn ->
             Error "Failed to deserialize general settings"
 
@@ -146,15 +148,14 @@ let initializeSite (options: InitializeSiteOptions) =
                          Files = [] }
                        |> StepType.CopyResources ] }
                 : PipelineConfiguration)
-                    .Serialize()    
+                    .Serialize()
 
             File.WriteAllText(Path.Combine(root, "build.json"), build)
-            
-            
+
+
             Ok()
     with exn ->
         Error $"Failed to initialize site. Error: {exn.Message}"
-
 
 let importTemplate (options: ImportTemplateOptions) =
     try
@@ -171,6 +172,20 @@ let importTemplate (options: ImportTemplateOptions) =
     with exn ->
         Error $"Failed to import template. Error: {exn.Message}"
 
+let importFragmentTemplate (options: ImportFragmentTemplateOptions) =
+    try
+        match File.Exists options.Path with
+        | true ->
+            let storePath = getStorePath options.StorePath
+
+            let store = StaticStore.Create storePath
+
+            match store.GetFragmentTemplate(options.Name) with
+            | None -> store.AddFragmentTemplate(options.Name, File.ReadAllBytes options.Path) |> Ok
+            | Some _ -> Error $"Fragment template `{options.Name}` already exists"
+        | false -> Error $"File `{options.Path}` does not exist"
+    with exn ->
+        Error $"Failed to import template. Error: {exn.Message}"
 
 let renderSite (options: RenderSiteOptions) =
 
@@ -179,16 +194,17 @@ let renderSite (options: RenderSiteOptions) =
         | Ok gs -> gs
         | Error _ -> { Paths = [] }
 
-    match Pipeline.loadConfiguration "C:\\ProjectData\\static_cms\\sites\\FPype\\build.json" with
-    | Ok cfg ->
+    let storePath = getStorePath options.StorePath
 
-        let store = StaticStore.Create "C:\\ProjectData\\static_cms\\static_store.db"
+    let store = StaticStore.Create storePath
 
-        let scriptHost =
-            ({ FsiSession = Faaz.ScriptHost.fsiSession () }: Faaz.ScriptHost.HostContext)
+    match store.GetSite options.Name with
+    | Some site ->
+        match Pipeline.loadConfiguration (Path.Combine(site.RootPath, "build.json")) with
+        | Ok cfg ->
 
-        match store.GetSite cfg.Site with
-        | Some site ->
+            let scriptHost =
+                ({ FsiSession = Faaz.ScriptHost.fsiSession () }: Faaz.ScriptHost.HostContext)
 
             let knownPaths =
                 ("$root", site.RootPath)
@@ -198,20 +214,19 @@ let renderSite (options: RenderSiteOptions) =
             let ctx = PipelineContext.Create(store, scriptHost, knownPaths)
 
             Pipeline.run ctx cfg
-        | None -> Error $"Unknown site `{cfg.Site}`."
-    | Error e -> Error $"Failed to create pipeline context: {e}"
+        | Error e -> Error $"Failed to create pipeline context: {e}"
+    | None -> Error $"Unknown site `{options.Name}`."
 
 let result =
     options
     |> Result.bind (fun o ->
         match o with
-        | InitializeSite initializeSiteOptions ->
-            initializeSite initializeSiteOptions 
+        | InitializeSite initializeSiteOptions -> initializeSite initializeSiteOptions
         | AddSite addSiteOptions -> failwith "todo"
         | ImportTemplate importTemplateOptions -> failwith "todo"
-        | RenderSite renderSiteOptions -> failwith "todo"
+        | RenderSite renderSiteOptions -> renderSite renderSiteOptions
         | AddPath addPageOptions -> failwith "todo"
-        | AddFragmentTemplate -> failwith "todo"
+        | ImportFragmentTemplate importFragmentTemplateOptions -> importFragmentTemplate importFragmentTemplateOptions
         | AddSitePlugin -> failwith "todo"
         | RunInit -> failwith "todo")
 

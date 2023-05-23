@@ -249,7 +249,7 @@ module PeepsTest =
             |> Encoding.UTF8.GetBytes
         //|> fun fdj -> File.WriteAllText("C:\\ProjectData\\static_cms\\sites\\Freql\\fragments\\news.json", fdj)
 
-        staticStore.AddPageFragment(versionRef, "news", "news", fragmentData, "json")
+        staticStore.AddPageFragment(versionRef, "news", "news", fragmentData, FragmentBlobType.Json)
 
         // Add the page to static store?
 
@@ -266,7 +266,7 @@ module PeepsTest =
                 fsi
         with
         | Ok r ->
-            staticStore.AddPageFragment(versionRef, "news", "news", r |> Encoding.UTF8.GetBytes, "json")
+            staticStore.AddPageFragment(versionRef, "news", "news", r |> Encoding.UTF8.GetBytes, FragmentBlobType.Json)
             ()
         | Error e -> printfn $"Error: {e}"
 
@@ -280,7 +280,7 @@ module PeepsTest =
             "features",
             "features",
             File.ReadAllBytes "C:\\ProjectData\\static_cms\\example_fragments\\peeps_features.md",
-            "markdown"
+            FragmentBlobType.Markdown
         )
 
         (*
@@ -298,7 +298,7 @@ module PeepsTest =
             "docs",
             "docs",
             File.ReadAllBytes "C:\\ProjectData\\static_cms\\example_fragments\\peeps_docs.json",
-            "json"
+            FragmentBlobType.Json
         )
 
     let render (store: StaticStore) =
@@ -447,7 +447,7 @@ module Peeps2 =
             "features",
             "features",
             File.ReadAllBytes "C:\\ProjectData\\static_cms\\example_fragments\\peeps_features.md",
-            "markdown"
+            FragmentBlobType.Markdown
         )
 
         store.AddPageFragment(
@@ -455,7 +455,7 @@ module Peeps2 =
             "news",
             "news",
             File.ReadAllBytes "C:\\ProjectData\\static_cms\\example_fragments\\peeps_news.json",
-            "json"
+            FragmentBlobType.Json
         )
 
         store.AddPageFragment(
@@ -463,7 +463,7 @@ module Peeps2 =
             "docs",
             "docs",
             File.ReadAllBytes "C:\\ProjectData\\static_cms\\example_fragments\\peeps_docs.json",
-            "json"
+            FragmentBlobType.Json
         )
 
         match PageRenderer.run store "peeps" "index" with

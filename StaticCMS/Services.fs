@@ -20,7 +20,7 @@ module Services =
             | AddSite of Name: string * Url: string * RootPath: string
             | AddPage of Reference: string * Site: string * Name: string * NameSlug: string
             | AddTemplate of Name: string * Raw: Stream
-            | AddPageFragment of VersionRef: string * Template: string * DataName: string * Raw: Stream * BlobType: string
+            | AddPageFragment of VersionRef: string * Template: string * DataName: string * Raw: Stream * BlobType: FragmentBlobType
             | AddFragmentTemplate of Name: string * Raw: Stream
             | AddPageVersion of Reference: string * Site: string * Page: string * Template: string * IsDraft: bool
             | RenderPage of Site: string * Page: string

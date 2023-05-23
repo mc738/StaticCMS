@@ -232,6 +232,8 @@ module Pipeline =
 
     and BuildPageStep =
         | AddPageFragment of AddPageFragmentPageBuildStep
+        | CombinePageFragments of CombinePageFragmentsPageBuildStep
+        | AddPageData of AddPageDataBuildStep
         //| RunPlugin
 
         static member Deserialize(el: JsonElement) =
@@ -239,6 +241,10 @@ module Pipeline =
             | Some "add-page-fragment" ->
                 AddPageFragmentPageBuildStep.Deserialize el
                 |> Result.map BuildPageStep.AddPageFragment
+            | Some "combine-page-fragments" ->
+                CombinePageFragmentsPageBuildStep.Deserialize el
+                |> Result.map BuildPageStep.CombinePageFragments
+            | Some "add-page-data" -> AddPageDataBuildStep.Deserialize el |> Result.map BuildPageStep.AddPageData
             //| Some "run-plugin" -> Ok()
             | Some t -> Error $"Unknown step type `{t}`."
             | None -> Error "Missing `type` property."
@@ -250,9 +256,14 @@ module Pipeline =
             | AddPageFragment addPageFragmentPageBuildStep ->
                 writer.WriteString("type", "add-page-fragment")
                 addPageFragmentPageBuildStep.WriteToJson writer
+            | CombinePageFragments combinePageFragmentsPageBuildStep ->
+                writer.WriteString("type", "combine-page-fragments")
+                combinePageFragmentsPageBuildStep.WriteToJson writer
+            | AddPageData addPageDataPageBuildStep ->
+                writer.WriteString("type", "add-page-data")
+                addPageDataPageBuildStep.WriteToJson writer
 
             writer.WriteEndObject()
-
 
     and AddPageFragmentPageBuildStep =
         { Path: string
@@ -270,6 +281,41 @@ module Pipeline =
             writer.WriteString("path", apf.Path)
             writer.WritePropertyName("fragment")
             apf.Fragment.WriteToJson writer
+
+    and CombinePageFragmentsPageBuildStep =
+        { OutputName: string
+          Template: string
+          Fragments: string list }
+
+        static member Deserialize(el: JsonElement) =
+            match
+                Json.tryGetStringProperty "outputName" el,
+                Json.tryGetStringProperty "template" el,
+                Json.tryGetProperty "fragments" el |> Option.bind Json.tryGetStringArray
+            with
+            | Some on, Some t, Some fs ->
+                Ok
+                    { OutputName = on
+                      Template = t
+                      Fragments = fs }
+            | None, _, _ -> Error "Missing `outputName` property."
+            | _, None, _ -> Error "Missing `template` property."
+            | _, _, None -> Error "Missing/invalid `fragments` property."
+
+        member internal cpf.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteString("outputName", cpf.OutputName)
+            writer.WriteString("template", cpf.Template)
+            Json.writeArray (fun w -> cpf.Fragments |> List.iter writer.WriteStringValue) "fragments" writer
+
+    and AddPageDataBuildStep =
+        { Path: string }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "path" el with
+            | Some p -> Ok { Path = p }
+            | None -> Error "Missing `path` property."
+
+        member internal cpf.WriteToJson(writer: Utf8JsonWriter) = writer.WriteString("path", cpf.Path)
 
     and RunPluginScriptAction =
         { Name: string
@@ -309,32 +355,33 @@ module Pipeline =
     and FragmentActionData =
         { Template: string
           DataName: string
-          ContentType: string }
+          ContentType: FragmentBlobType }
 
         static member Deserialize(el: JsonElement) =
             match
                 Json.tryGetStringProperty "template" el,
                 Json.tryGetStringProperty "dataName" el,
                 Json.tryGetStringProperty "contentType" el
+                |> Option.map FragmentBlobType.TryDeserialize
+                |> Option.defaultWith (fun _ -> Error "Fragment element missing `contentType` property.")
             with
-            | Some t, Some dn, Some ct ->
+            | Some t, Some dn, Ok ct ->
                 Ok
                     { Template = t
                       DataName = dn
                       ContentType = ct }
             | None, _, _ -> Error "Fragment element missing `template` property."
             | _, None, _ -> Error "Fragment element missing `dataName` property."
-            | _, _, None -> Error "Fragment element missing `contentType` property."
+            | _, _, Error e -> Error e
 
         member internal apf.WriteToJson(writer: Utf8JsonWriter) =
             writer.WriteStartObject()
 
             writer.WriteString("template", apf.Template)
             writer.WriteString("dataName", apf.DataName)
-            writer.WriteString("contentType", apf.ContentType)
+            writer.WriteString("contentType", apf.ContentType.Serialize())
 
             writer.WriteEndObject()
-
 
     type PipelineContext =
         { Store: StaticStore
@@ -449,6 +496,21 @@ module Pipeline =
                     File.ReadAllBytes <| ctx.ExpandPath data.Path,
                     data.Fragment.ContentType
                 )
+            | CombinePageFragments data ->
+                // Get page fragments and render into new fragment.
+                match PageRenderer.combineFragments ctx.Store data.Template versionRef data.Fragments with
+                | Ok f ->
+                    ctx.Store.AddPageFragment(
+                        versionRef,
+                        FragmentTemplate.Blank.Serialize(),
+                        data.OutputName,
+                        f |> Encoding.UTF8.GetBytes,
+                        FragmentBlobType.Html
+                    )
+                | Error e ->
+                    // TODO handle error?
+                    ()
+            | AddPageData addPageDataBuildStep -> failwith "todo"
 
         let buildPage (site: string) (ctx: PipelineContext) (action: BuildPageAction) =
             let fn _ =

@@ -44,12 +44,21 @@ module DataStore =
               ({ Name = "mustache" }: Parameters.NewResourceType) ]
             |> List.iter (Operations.insertResourceType ctx)
 
-            [ ({ Name = "markdown" }: Parameters.NewFragmentBlobType)
-              ({ Name = "json" }: Parameters.NewFragmentBlobType) ]
-            |> List.iter (Operations.insertFragmentBlobType ctx)
+            FragmentBlobType.All()
+            |> List.iter (fun fbt ->
+                ({ Name = fbt.Serialize() }: Parameters.NewFragmentBlobType)
+                |> Operations.insertFragmentBlobType ctx)
 
             [ ({ Name = "script" }: Parameters.NewPluginType) ]
             |> List.iter (Operations.insertPluginType ctx)
+
+            // Create special fragment templates.
+            // The names are in the format __[template name] nad found in the type FragmentTemplate.
+            [ ({ Name = FragmentTemplate.Blank.Serialize()
+                 Template = BlobField.Empty()
+                 Hash = hashBytes (SHA256.Create()) [||] }
+              : Parameters.NewFragmentTemplate) ]
+            |> List.iter (Operations.insertFragmentTemplate ctx >> ignore)
 
         let initialize path =
             match File.Exists path with
@@ -65,7 +74,8 @@ module DataStore =
         let addSite ctx name url rootPath =
             ({ Name = name
                Url = url
-               RootPath = rootPath }: Parameters.NewSite)
+               RootPath = rootPath }
+            : Parameters.NewSite)
             |> Operations.insertSite ctx
 
         let getSiteByName (ctx: SqliteContext) (name: string) =
@@ -77,7 +87,8 @@ module DataStore =
             ({ Reference = reference
                Site = site
                Name = name
-               NameSlug = nameSlug }: Parameters.NewPage)
+               NameSlug = nameSlug }
+            : Parameters.NewPage)
             |> Operations.insertPage ctx
 
         let getPageByName (ctx: SqliteContext) (site: string) (name: string) =
@@ -89,7 +100,8 @@ module DataStore =
         let addTemplate (ctx: SqliteContext) (name: string) (raw: BlobField) (hash: string) =
             ({ Name = name
                RawBlob = raw
-               Hash = hash }: Parameters.NewTemplate)
+               Hash = hash }
+            : Parameters.NewTemplate)
             |> Operations.insertTemplate ctx
 
         let getTemplate (ctx: SqliteContext) (name: string) =
@@ -98,8 +110,7 @@ module DataStore =
         let getLatestPageVersion (ctx: SqliteContext) (pageReference: string) =
             Operations.selectPageVersionRecord
                 ctx
-                [ "WHERE page_reference = @0"
-                  "ORDER BY version DESC LIMIT 1" ]
+                [ "WHERE page_reference = @0"; "ORDER BY version DESC LIMIT 1" ]
                 [ pageReference ]
 
         let addPageVersion
@@ -121,7 +132,8 @@ module DataStore =
                Version = version
                IsDraft = isDraft
                Template = template
-               CreatedOn = DateTime.UtcNow }: Parameters.NewPageVersion)
+               CreatedOn = DateTime.UtcNow }
+            : Parameters.NewPageVersion)
             |> Operations.insertPageVersion ctx
 
         let addPageFragment (ctx: SqliteContext) versionReference template dataName raw hash blobType =
@@ -130,11 +142,12 @@ module DataStore =
                DataName = dataName
                RawBlob = raw
                Hash = hash
-               BlobType = blobType }: Parameters.NewPageFragment)
+               BlobType = blobType }
+            : Parameters.NewPageFragment)
             |> Operations.insertPageFragment ctx
 
         let getPageFragment (ctx: SqliteContext) (versionReference: string) (dataName: string) =
-            Operations.selectFragmentTemplateRecord
+            Operations.selectPageFragmentRecord
                 ctx
                 [ "WHERE version_reference = @0 and data_name = @1" ]
                 [ versionReference; dataName ]
@@ -145,7 +158,8 @@ module DataStore =
         let addFragmentTemplate (ctx: SqliteContext) (name: string) (template: BlobField) (hash: string) =
             ({ Name = name
                Template = template
-               Hash = hash }: Parameters.NewFragmentTemplate)
+               Hash = hash }
+            : Parameters.NewFragmentTemplate)
             |> Operations.insertFragmentTemplate ctx
 
         let getFragmentTemplate (ctx: SqliteContext) (name: string) =
@@ -161,7 +175,8 @@ module DataStore =
         let addSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) (config: BlobField) =
             ({ Site = site
                Plugin = plugin
-               Configuration = config }: Parameters.NewSitePlugin)
+               Configuration = config }
+            : Parameters.NewSitePlugin)
             |> Operations.insertSitePlugin ctx
 
         let getPluginResource (ctx: SqliteContext) (plugin: string) (name: string) =
@@ -171,8 +186,7 @@ module DataStore =
             Operations.selectSitePluginRecord ctx [ "WHERE site = @0 AND plugin = @1" ] [ site; plugin ]
 
         let addPluginType (ctx: SqliteContext) (name: string) =
-            ({ Name = name }: Parameters.NewPluginType)
-            |> Operations.insertPluginType ctx
+            ({ Name = name }: Parameters.NewPluginType) |> Operations.insertPluginType ctx
 
     type StoreOperationFailure =
         { Message: string
@@ -214,7 +228,7 @@ module DataStore =
         | Success
         | AlreadyExists
         | Failure of StoreOperationFailure
-        
+
     type AddPageFragmentResult =
         | Success
         | AlreadyExists
@@ -223,18 +237,18 @@ module DataStore =
     let attempt<'T> (fn: unit -> 'T) =
         try
             fn () |> Ok
-        with
-        | exn ->
+        with exn ->
             Error
                 { Message = exn.Message
                   Exception = Some exn }
 
     type StaticStore(ctx: SqliteContext, path: string) =
 
-        static member Create(path) = StaticStore(Internal.initialize path, path)
+        static member Create(path) =
+            StaticStore(Internal.initialize path, path)
 
         member _.Path = path
-        
+
         member _.AddSite(name, url, rootPath) = Internal.addSite ctx name url rootPath
 
         member _.GetSite(name) = Internal.getSiteByName ctx name
@@ -290,12 +304,12 @@ module DataStore =
 
             Internal.addFragmentTemplate ctx name bf hash
 
-        member _.AddPageFragment(versionReference, template, dataName, raw: byte array, blobType: string) =
+        member _.AddPageFragment(versionReference, template, dataName, raw: byte array, blobType: FragmentBlobType) =
             use ms = new MemoryStream(raw)
             let hash = hashStream (SHA256.Create()) ms
             let bf = BlobField.FromStream ms
 
-            Internal.addPageFragment ctx versionReference template dataName bf hash blobType
+            Internal.addPageFragment ctx versionReference template dataName bf hash (blobType.Serialize())
 
         member _.AddPluginType(name) = Internal.addPluginType ctx name
 
@@ -304,8 +318,7 @@ module DataStore =
         member _.GetPlugin(name) = Internal.getPlugin ctx name
 
         member _.AddSitePlugin(site, plugin, configuration: string) =
-            use ms =
-                new MemoryStream(configuration |> Encoding.UTF8.GetBytes)
+            use ms = new MemoryStream(configuration |> Encoding.UTF8.GetBytes)
 
             //let hash = hashStream (SHA256.Create()) ms
             let bf = BlobField.FromStream ms
@@ -316,9 +329,7 @@ module DataStore =
 
         member _.GetSitePluginConfiguration(site, plugin) =
             Internal.getSitePlugin ctx site plugin
-            |> Option.map (fun sp ->
-                sp.Configuration.ToBytes()
-                |> Encoding.UTF8.GetString)
+            |> Option.map (fun sp -> sp.Configuration.ToBytes() |> Encoding.UTF8.GetString)
 
         member _.GetPluginResource(plugin, name) =
             Internal.getPluginResource ctx plugin name
@@ -393,7 +404,7 @@ module DataStore =
                 | None ->
                     store.AddPageFragment(versionReference, template, dataName, data, blobType)
                     AddPageFragmentResult.Success
-                    
+
             match attempt fn with
             | Ok r -> r
             | Error e -> AddPageFragmentResult.Failure e
@@ -405,9 +416,7 @@ module DataStore =
 
         member _.GetSitePluginConfiguration(site, plugin) =
             Internal.getSitePlugin ctx site plugin
-            |> Option.map (fun sp ->
-                sp.Configuration.ToBytes()
-                |> Encoding.UTF8.GetString)
+            |> Option.map (fun sp -> sp.Configuration.ToBytes() |> Encoding.UTF8.GetString)
 
         member _.GetPluginResource(plugin, name) =
             Internal.getPluginResource ctx plugin name
