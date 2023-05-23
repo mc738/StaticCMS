@@ -8,6 +8,7 @@
     <ItemGroup>
         <Compile Include="Library.fs" />
         <None Include="Articulus.fsx" />
+        <None Include="Wikd.fsx" />
     </ItemGroup>
 
     <ItemGroup>
