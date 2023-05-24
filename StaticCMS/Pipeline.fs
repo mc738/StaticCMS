@@ -321,36 +321,60 @@ module Pipeline =
         { Name: string
           Script: string
           Function: string
-          OutputType: string
-          OutputPath: string }
+          ReturnType: PluginReturnType }
 
         static member Deserialize(el: JsonElement) =
             match
                 Json.tryGetStringProperty "name" el,
                 Json.tryGetStringProperty "script" el,
                 Json.tryGetStringProperty "function" el,
-                Json.tryGetStringProperty "outputType" el,
-                Json.tryGetStringProperty "outputPath" el
+                Json.tryGetProperty "returnType" el
+                |> Option.map PluginReturnType.TryDeserialize
+                |> Option.defaultWith (fun _ -> Error "Missing `returnType` property")
             with
-            | Some name, Some script, Some functionName, Some outputType, Some outputPath ->
+            | Some name, Some script, Some functionName, Ok returnType ->
                 Ok
                     { Name = name
                       Script = script
                       Function = functionName
-                      OutputType = outputType
-                      OutputPath = outputPath }
-            | None, _, _, _, _ -> Error "Missing `name` property."
-            | _, None, _, _, _ -> Error "Missing `script` property."
-            | _, _, None, _, _ -> Error "Missing `function` property."
-            | _, _, _, None, _ -> Error "Missing `outputType` property."
-            | _, _, _, _, None -> Error "Missing `outputPath` property."
+                      ReturnType = returnType }
+            | None, _, _, _ -> Error "Missing `name` property."
+            | _, None, _, _ -> Error "Missing `script` property."
+            | _, _, None, _ -> Error "Missing `function` property."
+            | _, _, _, Error e -> Error e
 
         member internal apf.WriteToJson(writer: Utf8JsonWriter) =
             writer.WriteString("name", apf.Name)
             writer.WriteString("script", apf.Script)
             writer.WriteString("function", apf.Function)
-            writer.WriteString("outputType", apf.OutputType)
-            writer.WriteString("outputPath", apf.OutputPath)
+            writer.WritePropertyName("returnType")
+            apf.ReturnType.WriteToJson writer
+
+    and [<RequireQualifiedAccess>] PluginReturnType =
+        | Fragment of OutputPath: string
+        | None
+
+        static member TryDeserialize(json: JsonElement) =
+            match Json.tryGetStringProperty "type" json with
+            | Option.Some "fragment" ->
+                match Json.tryGetStringProperty "outputPath" json with
+                | Option.Some op -> Fragment op |> Ok
+                | Option.None -> Error "Missing `outputPath` property"
+            | Option.Some "none" -> Ok None
+            | Option.Some v -> Error $"Unknown plugin output type: `{v}`"
+            | Option.None -> Error "Missing `type` property"
+
+
+        member internal prt.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteStartObject()
+
+            match prt with
+            | Fragment outputPath ->
+                writer.WriteString("type", "fragment")
+                writer.WriteString("outputPath", outputPath)
+            | None -> writer.WriteString("type", "none")
+
+            writer.WriteEndObject()
 
     and FragmentActionData =
         { Template: string
@@ -480,9 +504,11 @@ module Pipeline =
 
                 let runCmd = $"""{action.Function} "{ctx.Store.Path}" "{site}" """
 
-                // TODO check output type...
-                ctx.ScriptHost.Eval<string>(scriptPath, runCmd)
-                |> Result.map (fun fd -> File.WriteAllText(ctx.ExpandPath action.OutputPath, fd))
+                match action.ReturnType with
+                | PluginReturnType.Fragment outputPath ->
+                    ctx.ScriptHost.Eval<string>(scriptPath, runCmd)
+                    |> Result.map (fun fd -> File.WriteAllText(ctx.ExpandPath outputPath, fd))
+                | PluginReturnType.None -> ctx.ScriptHost.Eval<unit>(scriptPath, runCmd)
 
             attempt fn
 

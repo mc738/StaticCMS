@@ -421,3 +421,7 @@ module DataStore =
         member _.GetPluginResource(plugin, name) =
             Internal.getPluginResource ctx plugin name
             |> Option.map (fun pr -> pr.RawBlob.ToBytes())
+
+        member _.GetFragmentTemplate(name) =
+            Internal.getFragmentTemplate ctx name
+            |> Option.map (fun ft -> ft.Template.ToBytes())

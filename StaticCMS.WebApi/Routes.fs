@@ -1,5 +1,6 @@
 ﻿namespace StaticCMS.WebApi
 
+open StaticCMS
 open StaticCMS.DataStore
 open StaticCMS.Services
 
@@ -30,12 +31,11 @@ module Routes =
 
         let tryBindRequest<'a> (ctx: HttpContext) =
             try
-                let result =
-                    ctx.BindJsonAsync<'a>() |> Async.AwaitTask
+                let result = ctx.BindJsonAsync<'a>() |> Async.AwaitTask
 
                 Ok(result)
-            with
-            | ex -> Error(sprintf "Could not bind request to type '%s'" typeof<'a>.Name)
+            with ex ->
+                Error(sprintf "Could not bind request to type '%s'" typeof<'a>.Name)
 
         let tryGetHeader (ctx: HttpContext) header =
             match ctx.Request.Headers.TryGetValue header with
@@ -47,8 +47,7 @@ module Routes =
         let tryGetFormValue (ctx: HttpContext) key = ctx.GetFormValue key
 
         let isTrue (str: string) =
-            [ "true"; "yes"; "1"; "ok" ]
-            |> List.contains (str.ToLower())
+            [ "true"; "yes"; "1"; "ok" ] |> List.contains (str.ToLower())
 
     module TestRoutes =
         //open RouteConfiguration
@@ -59,10 +58,9 @@ module Routes =
 
         let routes: (HttpFunc -> HttpContext -> HttpFuncResult) list =
             [ GET
-              >=> choose [ route "/test" >=> helloWorld
-                           route "/test/auth"
-                           >=> Utils.authorize
-                           >=> authTest ] ]
+              >=> choose
+                  [ route "/test" >=> helloWorld
+                    route "/test/auth" >=> Utils.authorize >=> authTest ] ]
 
     module Sites =
 
@@ -119,13 +117,11 @@ module Routes =
                 async {
                     let log = ctx.GetLogger("add-site")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
@@ -153,13 +149,11 @@ module Routes =
                 async {
                     let log = ctx.GetLogger("add-page")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
@@ -190,13 +184,11 @@ module Routes =
                 async {
                     let log = ctx.GetLogger("add-template")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
@@ -218,23 +210,19 @@ module Routes =
 
             fun (next: HttpFunc) (ctx: HttpContext) ->
                 async {
-                    let log =
-                        ctx.GetLogger("add-fragment-template")
+                    let log = ctx.GetLogger("add-fragment-template")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
                     match get "name" with
                     | Some n ->
-                        use ls =
-                            log.BeginScope("Adding fragment template")
+                        use ls = log.BeginScope("Adding fragment template")
 
                         log.LogInformation($"Name: {n}")
 
@@ -253,13 +241,11 @@ module Routes =
                 async {
                     let log = ctx.GetLogger("add-page-version")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
@@ -294,20 +280,24 @@ module Routes =
                 async {
                     let log = ctx.GetLogger("add-page-fragment")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
-                    match get "versionref", get "template", get "dataname", get "blobtype" with
-                    | Some vr, Some t, Some dn, Some bt ->
-                        use s =
-                            log.BeginScope("Adding page fragment")
+                    match
+                        get "versionref",
+                        get "template",
+                        get "dataname",
+                        get "blobtype"
+                        |> Option.map FragmentBlobType.TryDeserialize
+                        |> Option.defaultWith (fun _ -> Error "Missing `blobtype` parameter.")
+                    with
+                    | Some vr, Some t, Some dn, Ok bt ->
+                        use s = log.BeginScope("Adding page fragment")
 
                         log.LogInformation($"Version ref: {vr}")
                         log.LogInformation($"Template: {t}")
@@ -318,10 +308,11 @@ module Routes =
                         | Ok _ -> return text "Page fragment saved." next ctx
                         | Error e ->
                             return (Utils.errorHandler log name 400 $"Error while processing the request: {e}") next ctx
-                    | None, _, _, _ -> return (Utils.errorHandler log name 400 "Missing `versionref` parameter.") next ctx
+                    | None, _, _, _ ->
+                        return (Utils.errorHandler log name 400 "Missing `versionref` parameter.") next ctx
                     | _, None, _, _ -> return (Utils.errorHandler log name 400 "Missing `template` parameter.") next ctx
                     | _, _, None, _ -> return (Utils.errorHandler log name 400 "Missing `dataname` parameter.") next ctx
-                    | _, _, _, None -> return (Utils.errorHandler log name 400 "Missing `blobtype` parameter.") next ctx
+                    | _, _, _, Error e -> return (Utils.errorHandler log name 400 e) next ctx
                 }
                 |> Async.RunSynchronously
 
@@ -332,20 +323,17 @@ module Routes =
                 async {
                     let log = ctx.GetLogger("render-page")
                     //let formFeature = ctx.Features.Get<IFormFeature>()
-                    let formContentType =
-                        ctx.Request.HasFormContentType
+                    let formContentType = ctx.Request.HasFormContentType
 
                     let form = ctx.Request.Form // formFeature.ReadFormAsync CancellationToken.None |> Async.AwaitTask
 
-                    let service =
-                        ctx.GetService<StaticCMSService>()
+                    let service = ctx.GetService<StaticCMSService>()
 
                     let get key = Utils.tryGetFormValue ctx key
 
                     match get "site", get "page" with
                     | Some s, Some p ->
-                        use ls =
-                            log.BeginScope("Adding fragment template")
+                        use ls = log.BeginScope("Adding fragment template")
 
                         log.LogInformation($"Site: {s}")
                         log.LogInformation($"Page: {p}")
@@ -362,21 +350,19 @@ module Routes =
         let routes: (HttpFunc -> HttpContext -> HttpFuncResult) list =
             (*GET >=> (*Routes.Utils.authorize >=>*) choose [ route "/pages/fragment/add" >=> (*Routes.Utils.authorize >=>*) getBlob ]*)
             [ POST
-              >=> (*Routes.Utils.authorize >=>*) choose [ route "/sites/add" >=> addSite
-                                                          route "/pages/add" >=> addPage
-                                                          route "/templates/add" >=> addTemplate
-                                                          route "/templates/fragments/add"
-                                                          >=> addFragmentTemplate
-                                                          route "/pages/versions/add" >=> addPageVersion
-                                                          route "/pages/render" >=> renderPage
-                                                          route "/pages/fragments/add"
-                                                          >=> (*Routes.Utils.authorize >=>*) addPageFragment ] ]
+              >=> (*Routes.Utils.authorize >=>*) choose
+                  [ route "/sites/add" >=> addSite
+                    route "/pages/add" >=> addPage
+                    route "/templates/add" >=> addTemplate
+                    route "/templates/fragments/add" >=> addFragmentTemplate
+                    route "/pages/versions/add" >=> addPageVersion
+                    route "/pages/render" >=> renderPage
+                    route "/pages/fragments/add" >=> (*Routes.Utils.authorize >=>*) addPageFragment ] ]
 
     let all =
-        List.concat [ TestRoutes.routes
-                      Sites.routes
-                      [ Utils.authorize
-                        >=> choose Peeps.Monitoring.PeepsMetricRoutes.routes ] ]
+        List.concat
+            [ TestRoutes.routes
+              Sites.routes
+              [ Utils.authorize >=> choose Peeps.Monitoring.PeepsMetricRoutes.routes ] ]
 
-    let app: (HttpFunc -> HttpContext -> HttpFuncResult) =
-        choose all
+    let app: (HttpFunc -> HttpContext -> HttpFuncResult) = choose all
