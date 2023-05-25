@@ -5,7 +5,7 @@ open System.Text.Json.Serialization
 open Freql.Core.Common
 open Freql.Sqlite
 
-/// Module generated on 28/07/2022 20:51:08 (utc) via Freql.Sqlite.Tools.
+/// Module generated on 25/05/2023 21:00:55 (utc) via Freql.Sqlite.Tools.
 [<RequireQualifiedAccess>]
 module Records =
     /// A record representing a row in the table `fragment_blob_type`.
@@ -24,7 +24,7 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name
+              fragment_blob_type.`name`
         FROM fragment_blob_type
         """
     
@@ -51,13 +51,48 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name,
-              template,
-              hash
+              fragment_templates.`name`,
+              fragment_templates.`template`,
+              fragment_templates.`hash`
         FROM fragment_templates
         """
     
         static member TableName() = "fragment_templates"
+    
+    /// A record representing a row in the table `page_data`.
+    type PageData =
+        { [<JsonPropertyName("reference")>] Reference: string
+          [<JsonPropertyName("versionReference")>] VersionReference: string
+          [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
+          [<JsonPropertyName("hash")>] Hash: string }
+    
+        static member Blank() =
+            { Reference = String.Empty
+              VersionReference = String.Empty
+              RawBlob = BlobField.Empty()
+              Hash = String.Empty }
+    
+        static member CreateTableSql() = """
+        CREATE TABLE page_data (
+	reference TEXT NOT NULL,
+	version_reference TEXT NOT NULL,
+	raw_blob BLOB NOT NULL,
+	hash TEXT NOT NULL,
+	CONSTRAINT NewTable_PK PRIMARY KEY (reference),
+	CONSTRAINT page_data_FK FOREIGN KEY (version_reference) REFERENCES page_versions(reference)
+)
+        """
+    
+        static member SelectSql() = """
+        SELECT
+              page_data.`reference`,
+              page_data.`version_reference`,
+              page_data.`raw_blob`,
+              page_data.`hash`
+        FROM page_data
+        """
+    
+        static member TableName() = "page_data"
     
     /// A record representing a row in the table `page_fragments`.
     type PageFragment =
@@ -93,12 +128,12 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              version_reference,
-              template,
-              data_name,
-              raw_blob,
-              hash,
-              blob_type
+              page_fragments.`version_reference`,
+              page_fragments.`template`,
+              page_fragments.`data_name`,
+              page_fragments.`raw_blob`,
+              page_fragments.`hash`,
+              page_fragments.`blob_type`
         FROM page_fragments
         """
     
@@ -137,12 +172,12 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              reference,
-              page_reference,
-              version,
-              is_draft,
-              template,
-              created_on
+              page_versions.`reference`,
+              page_versions.`page_reference`,
+              page_versions.`version`,
+              page_versions.`is_draft`,
+              page_versions.`template`,
+              page_versions.`created_on`
         FROM page_versions
         """
     
@@ -175,10 +210,10 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              reference,
-              site,
-              name,
-              name_slug
+              pages.`reference`,
+              pages.`site`,
+              pages.`name`,
+              pages.`name_slug`
         FROM pages
         """
     
@@ -214,11 +249,11 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name,
-              plugin,
-              raw_blob,
-              hash,
-              resource_type
+              plugin_resources.`name`,
+              plugin_resources.`plugin`,
+              plugin_resources.`raw_blob`,
+              plugin_resources.`hash`,
+              plugin_resources.`resource_type`
         FROM plugin_resources
         """
     
@@ -240,7 +275,7 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name
+              plugin_types.`name`
         FROM plugin_types
         """
     
@@ -266,8 +301,8 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name,
-              plugin_type
+              plugins.`name`,
+              plugins.`plugin_type`
         FROM plugins
         """
     
@@ -303,12 +338,12 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              version_reference,
-              raw_blob,
-              hash,
-              rendered_on,
-              virtual_path,
-              file_name
+              rendered_pages.`version_reference`,
+              rendered_pages.`raw_blob`,
+              rendered_pages.`hash`,
+              rendered_pages.`rendered_on`,
+              rendered_pages.`virtual_path`,
+              rendered_pages.`file_name`
         FROM rendered_pages
         """
     
@@ -330,7 +365,7 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name
+              resource_types.`name`
         FROM resource_types
         """
     
@@ -370,13 +405,13 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name,
-              site,
-              resource_type,
-              raw_blob,
-              hash,
-              virtual_path,
-              file_name
+              resources.`name`,
+              resources.`site`,
+              resources.`resource_type`,
+              resources.`raw_blob`,
+              resources.`hash`,
+              resources.`virtual_path`,
+              resources.`file_name`
         FROM resources
         """
     
@@ -406,9 +441,9 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              site,
-              plugin,
-              configuration
+              site_plugins.`site`,
+              site_plugins.`plugin`,
+              site_plugins.`configuration`
         FROM site_plugins
         """
     
@@ -436,9 +471,9 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name,
-              root_path,
-              url
+              sites.`name`,
+              sites.`root_path`,
+              sites.`url`
         FROM sites
         """
     
@@ -466,16 +501,16 @@ module Records =
     
         static member SelectSql() = """
         SELECT
-              name,
-              raw_blob,
-              hash
+              templates.`name`,
+              templates.`raw_blob`,
+              templates.`hash`
         FROM templates
         """
     
         static member TableName() = "templates"
     
 
-/// Module generated on 28/07/2022 20:51:08 (utc) via Freql.Tools.
+/// Module generated on 25/05/2023 21:00:55 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Parameters =
     /// A record representing a new row in the table `fragment_blob_type`.
@@ -495,6 +530,20 @@ module Parameters =
         static member Blank() =
             { Name = String.Empty
               Template = BlobField.Empty()
+              Hash = String.Empty }
+    
+    
+    /// A record representing a new row in the table `page_data`.
+    type NewPageData =
+        { [<JsonPropertyName("reference")>] Reference: string
+          [<JsonPropertyName("versionReference")>] VersionReference: string
+          [<JsonPropertyName("rawBlob")>] RawBlob: BlobField
+          [<JsonPropertyName("hash")>] Hash: string }
+    
+        static member Blank() =
+            { Reference = String.Empty
+              VersionReference = String.Empty
+              RawBlob = BlobField.Empty()
               Hash = String.Empty }
     
     
@@ -664,7 +713,7 @@ module Parameters =
               Hash = String.Empty }
     
     
-/// Module generated on 28/07/2022 20:51:08 (utc) via Freql.Tools.
+/// Module generated on 25/05/2023 21:00:55 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Operations =
 
@@ -717,6 +766,30 @@ module Operations =
     
     let insertFragmentTemplate (context: SqliteContext) (parameters: Parameters.NewFragmentTemplate) =
         context.Insert("fragment_templates", parameters)
+    
+    /// Select a `Records.PageData` from the table `page_data`.
+    /// Internally this calls `context.SelectSingleAnon<Records.PageData>` and uses Records.PageData.SelectSql().
+    /// The caller can provide extra string lines to create a query and boxed parameters.
+    /// It is up to the caller to verify the sql and parameters are correct,
+    /// this should be considered an internal function (not exposed in public APIs).
+    /// Parameters are assigned names based on their order in 0 indexed array. For example: @0,@1,@2...
+    /// Example: selectPageDataRecord ctx "WHERE `field` = @0" [ box `value` ]
+    let selectPageDataRecord (context: SqliteContext) (query: string list) (parameters: obj list) =
+        let sql = [ Records.PageData.SelectSql() ] @ query |> buildSql
+        context.SelectSingleAnon<Records.PageData>(sql, parameters)
+    
+    /// Internally this calls `context.SelectAnon<Records.PageData>` and uses Records.PageData.SelectSql().
+    /// The caller can provide extra string lines to create a query and boxed parameters.
+    /// It is up to the caller to verify the sql and parameters are correct,
+    /// this should be considered an internal function (not exposed in public APIs).
+    /// Parameters are assigned names based on their order in 0 indexed array. For example: @0,@1,@2...
+    /// Example: selectPageDataRecords ctx "WHERE `field` = @0" [ box `value` ]
+    let selectPageDataRecords (context: SqliteContext) (query: string list) (parameters: obj list) =
+        let sql = [ Records.PageData.SelectSql() ] @ query |> buildSql
+        context.SelectAnon<Records.PageData>(sql, parameters)
+    
+    let insertPageData (context: SqliteContext) (parameters: Parameters.NewPageData) =
+        context.Insert("page_data", parameters)
     
     /// Select a `Records.PageFragment` from the table `page_fragments`.
     /// Internally this calls `context.SelectSingleAnon<Records.PageFragment>` and uses Records.PageFragment.SelectSql().

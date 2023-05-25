@@ -21,7 +21,7 @@
       <PackageReference Include="FDOM.Core" Version="0.3.0" />
       <PackageReference Include="FDOM.Rendering.Html" Version="0.3.0" />
       <PackageReference Include="Fluff.Core" Version="0.3.0" />
-      <PackageReference Include="Freql.Sqlite" Version="0.5.1" />
+      <PackageReference Include="Freql.Sqlite" Version="0.9.0" />
       <PackageReference Include="FsToolbox" Version="0.3.3" />
     </ItemGroup>
 
