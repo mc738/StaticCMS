@@ -79,8 +79,26 @@ module PageRenderer =
             | Some template ->
                 let tokens = Mustache.parse template
 
-                store.GetPageFragments pv.Reference
-                |> List.choose (tryRenderPageFragment store)
+                [ // Page data
+                  yield!
+                      store.GetPageData pv.Reference
+                      |> List.choose (fun pd ->
+                          try
+                              // NOTE this could be a bit clear but would require a change to Fluff.
+                              Mustache.Data
+                                  .FromJson(
+                                      pd.RawBlob.ToBytes() |> Encoding.UTF8.GetString,
+                                      PageFragments.renderInline
+                                  )
+                                  .Values
+                              |> Map.toList
+                              |> Some
+                          with exn ->
+                              None)
+                      |> List.concat
+
+                  // Page fragments
+                  yield! store.GetPageFragments pv.Reference |> List.choose (tryRenderPageFragment store) ]
                 |> Map.ofList
                 |> fun v -> ({ Values = v; Partials = Map.empty }: Mustache.Data)
                 |> fun d -> Mustache.replace d true tokens |> Ok

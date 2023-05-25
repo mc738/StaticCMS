@@ -8,7 +8,6 @@ open Fipc.Messaging.Persistence
 open Freql.Core.Common.Types
 open Freql.Sqlite
 
-
 module DataStore =
 
     open StaticCMS.Persistence
@@ -188,6 +187,17 @@ module DataStore =
         let addPluginType (ctx: SqliteContext) (name: string) =
             ({ Name = name }: Parameters.NewPluginType) |> Operations.insertPluginType ctx
 
+        let addPageData (ctx: SqliteContext) (versionReference: string) (data: BlobField) (hash: string) =
+            ({ Reference = Guid.NewGuid().ToString("n")
+               VersionReference = versionReference
+               RawBlob = data
+               Hash = hash }
+            : Parameters.NewPageData)
+            |> Operations.insertPageData ctx
+
+        let getPageData (ctx: SqliteContext) (versionReference: string) =
+            Operations.selectPageDataRecords ctx [ "WHERE version_reference = @0;" ] [ versionReference ]
+
     type StoreOperationFailure =
         { Message: string
           Exception: exn option }
@@ -287,6 +297,9 @@ module DataStore =
         member _.GetPageFragments(versionReference: string) =
             Internal.getPageFragments ctx versionReference
 
+        member _.GetPageData(versionReference: string) =
+            Internal.getPageData ctx versionReference
+
         member _.GetFragmentTemplate(name: string) = Internal.getFragmentTemplate ctx name
 
         //member store.GetFragmentTemplateString(name: string) =
@@ -310,6 +323,13 @@ module DataStore =
             let bf = BlobField.FromStream ms
 
             Internal.addPageFragment ctx versionReference template dataName bf hash (blobType.Serialize())
+
+        member _.AddPageData(versionReference, data: byte array) =
+            use ms = new MemoryStream(data)
+            let hash = hashStream (SHA256.Create()) ms
+            let bf = BlobField.FromStream ms
+
+            Internal.addPageData ctx versionReference bf hash
 
         member _.AddPluginType(name) = Internal.addPluginType ctx name
 
@@ -335,6 +355,7 @@ module DataStore =
             Internal.getPluginResource ctx plugin name
             |> Option.map (fun pr -> pr.RawBlob.ToBytes())
 
+
         member store.TryAddSite(name, url, root) =
             let fn _ =
                 match store.GetSite name with
@@ -346,7 +367,6 @@ module DataStore =
             match attempt fn with
             | Ok r -> r
             | Error e -> AddSiteResult.Failure e
-
 
         member store.AddPage(site, name, nameSlug) =
             let fn _ =

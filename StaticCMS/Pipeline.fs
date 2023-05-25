@@ -515,13 +515,20 @@ module Pipeline =
         let buildPageStep (versionRef: string) (ctx: PipelineContext) (step: BuildPageStep) =
             match step with
             | BuildPageStep.AddPageFragment data ->
-                ctx.Store.AddPageFragment(
-                    versionRef,
-                    data.Fragment.Template,
-                    data.Fragment.DataName,
-                    File.ReadAllBytes <| ctx.ExpandPath data.Path,
-                    data.Fragment.ContentType
-                )
+                let path = ctx.ExpandPath data.Path
+                
+                match File.Exists path with
+                | true ->
+                    ctx.Store.AddPageFragment(
+                        versionRef,
+                        data.Fragment.Template,
+                        data.Fragment.DataName,
+                        File.ReadAllBytes path,
+                        data.Fragment.ContentType
+                    )
+                | false ->
+                    // TODO handle error.
+                    ()
             | CombinePageFragments data ->
                 // Get page fragments and render into new fragment.
                 match PageRenderer.combineFragments ctx.Store data.Template versionRef data.Fragments with
@@ -536,7 +543,15 @@ module Pipeline =
                 | Error e ->
                     // TODO handle error?
                     ()
-            | AddPageData addPageDataBuildStep -> failwith "todo"
+            | AddPageData addPageDataBuildStep ->
+                let path = ctx.ExpandPath addPageDataBuildStep.Path
+                
+                match File.Exists path with
+                | true ->
+                    ctx.Store.AddPageData(versionRef, File.ReadAllBytes path)
+                | false ->
+                    // TODO handle error?
+                    ()
 
         let buildPage (site: string) (ctx: PipelineContext) (action: BuildPageAction) =
             let fn _ =
