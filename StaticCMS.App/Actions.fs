@@ -127,3 +127,6 @@ module Actions =
     let addPlugin (store: StaticStore) (name: string) (pluginType: string) =
         match store.GetPlugin name with
         | Some p -> ActionResult.Skipped($"Plugin `{name}` already exists.", Some p.Name)
+        | None ->
+            store.AddPlugin(name, pluginType)
+            ActionResult.Success($"Plugin `{name}` added.", None)

@@ -38,6 +38,20 @@ let buildPages (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) =
             // TODO need to handle errors better!
             File.ReadAllText dp |> PageFragments.renderJsonFragment ft)
 
+    let pageData =
+        cfg.ArticlePageDataPaths
+        |> List.choose (fun apd ->
+            try
+                match File.Exists apd with
+                | true ->
+                    // NOTE this could be a bit clear but would require a change to Fluff.
+                    Mustache.Data.FromJson(File.ReadAllText apd, PageFragments.renderInline).Values
+                    |> Map.toList
+                    |> Some
+                | false -> None
+            with exn ->
+                None)
+        |> List.concat
 
     // TODO make configurable.
     let values =
@@ -54,7 +68,8 @@ let buildPages (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) =
           | None -> ()
           match cfg.IconScript with
           | Some icons -> "icon_script", [ "url", Mustache.Value.Scalar icons ] |> Map.ofList |> Mustache.Value.Object
-          | None -> () ]
+          | None -> ()
+          yield! pageData ]
 
     importFiles store printResult cfg.DataPath
 
@@ -72,6 +87,8 @@ let buildPages (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) =
     |> List.sortByDescending (fun fd -> fd.Date)
 
 let buildIndex (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) (fragmentData: FragmentDataItem list) =
+    // Put article template in store?
+    
     let newPathTemplate = File.ReadAllText cfg.IndexPageTemplatePath |> Mustache.parse
 
     let navBar =
@@ -83,6 +100,20 @@ let buildIndex (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) (f
             // TODO need to handle errors better!
             File.ReadAllText dp |> PageFragments.renderJsonFragment ft)
 
+    let pageData =
+        cfg.IndexPageDataPaths
+        |> List.choose (fun ipd ->
+            try
+                match File.Exists ipd with
+                | true ->
+                    // NOTE this could be a bit clear but would require a change to Fluff.
+                    Mustache.Data.FromJson(File.ReadAllText ipd, PageFragments.renderInline).Values
+                    |> Map.toList
+                    |> Some
+                | false -> None
+            with exn ->
+                None)
+        |> List.concat
 
     ({ Values =
         [ "items",
@@ -108,7 +139,8 @@ let buildIndex (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) (f
           | None -> ()
           match cfg.IconScript with
           | Some icons -> "icon_script", [ "url", Mustache.Value.Scalar icons ] |> Map.ofList |> Mustache.Value.Object
-          | None -> () ]
+          | None -> ()
+          yield! pageData ]
         |> Map.ofList
        Partials = Map.empty }
     : Mustache.Data)
