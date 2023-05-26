@@ -27,7 +27,14 @@ open Articulus.Rendering
 let buildPages (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) =
     let store = ArticulusStore.Create cfg.StorePath
 
-    let template = File.ReadAllText cfg.TemplatePath |> Mustache.parse
+    let template =
+        match cfg.TemplateLocation with
+        | TemplateLocationType.Store v ->
+            staticStore.GetTemplate v
+            |> Option.map Encoding.UTF8.GetString
+            |> Option.defaultValue ""
+        | TemplateLocationType.File v -> File.ReadAllText v
+        |> Mustache.parse
 
     let navBar =
         cfg.ArticleNavBar
@@ -88,8 +95,14 @@ let buildPages (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) =
 
 let buildIndex (staticStore: StaticStoreReader) (cfg: ArticulusConfiguration) (fragmentData: FragmentDataItem list) =
     // Put article template in store?
-    
-    let newPathTemplate = File.ReadAllText cfg.IndexPageTemplatePath |> Mustache.parse
+    let newPathTemplate =
+        match cfg.IndexTemplateLocation with
+        | TemplateLocationType.Store v ->
+            staticStore.GetTemplate v
+            |> Option.map Encoding.UTF8.GetString
+            |> Option.defaultValue ""
+        | TemplateLocationType.File v -> File.ReadAllText v
+        |> Mustache.parse
 
     let navBar =
         cfg.IndexNavBar

@@ -223,7 +223,7 @@ let result =
         match o with
         | InitializeSite initializeSiteOptions -> initializeSite initializeSiteOptions
         | AddSite addSiteOptions -> failwith "todo"
-        | ImportTemplate importTemplateOptions -> failwith "todo"
+        | ImportTemplate importTemplateOptions -> importTemplate importTemplateOptions
         | RenderSite renderSiteOptions -> renderSite renderSiteOptions
         | AddPath addPageOptions -> failwith "todo"
         | ImportFragmentTemplate importFragmentTemplateOptions -> importFragmentTemplate importFragmentTemplateOptions
