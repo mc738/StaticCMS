@@ -107,6 +107,8 @@ module Pipeline =
         | CopyResources of CopyResourcesAction
         | BuildPage of BuildPageAction
         | RunPluginScript of RunPluginScriptAction
+        | ClearRendered
+        | BundleSite of BundleSiteAction
 
         static member Deserialize(el: JsonElement) =
             match Json.tryGetStringProperty "type" el with
@@ -119,6 +121,8 @@ module Pipeline =
             | Some "copy-resources" -> CopyResourcesAction.Deserialize el |> Result.map StepType.CopyResources
             | Some "build-page" -> BuildPageAction.Deserialize el |> Result.map StepType.BuildPage
             | Some "run-plugin-script" -> RunPluginScriptAction.Deserialize el |> Result.map StepType.RunPluginScript
+            | Some "clear-rendered" -> Ok StepType.ClearRendered
+            | Some "bundle-site" -> BundleSiteAction.Deserialize el |> Result.map StepType.BundleSite
             | Some t -> Error $"Unknown step type `{t}`."
             | None -> Error "Missing `type` property."
 
@@ -138,6 +142,10 @@ module Pipeline =
             | RunPluginScript runPluginScriptAction ->
                 writer.WriteString("type", "run-plugin-script")
                 runPluginScriptAction.WriteToJson writer
+            | ClearRendered -> writer.WriteString("type", "clear-directory")
+            | BundleSite bundleSiteAction ->
+                writer.WriteString("type", "bundle-site")
+                bundleSiteAction.WriteToJson writer
 
             writer.WriteEndObject()
 
@@ -305,7 +313,7 @@ module Pipeline =
         member internal cpf.WriteToJson(writer: Utf8JsonWriter) =
             writer.WriteString("outputName", cpf.OutputName)
             writer.WriteString("template", cpf.Template)
-            Json.writeArray (fun w -> cpf.Fragments |> List.iter writer.WriteStringValue) "fragments" writer
+            Json.writeArray (fun w -> cpf.Fragments |> List.iter w.WriteStringValue) "fragments" writer
 
     and AddPageDataBuildStep =
         { Path: string }
@@ -407,6 +415,22 @@ module Pipeline =
 
             writer.WriteEndObject()
 
+    and BundleSiteAction =
+        { OutputPath: string
+          NameFormat: string option }
+
+        static member Deserialize(el: JsonElement) =
+            match Json.tryGetStringProperty "outputPath" el with
+            | Some op ->
+                { OutputPath = op
+                  NameFormat = Json.tryGetStringProperty "nameFormat" el }
+                |> Ok
+            | None -> Error "Missing `outputPath` property."
+
+        member internal bsa.WriteToJson(writer: Utf8JsonWriter) =
+            writer.WriteString("outputPath", bsa.OutputPath)
+            bsa.NameFormat |> Option.iter (fun nf -> writer.WriteString("nameFormat", nf))
+
     type PipelineContext =
         { Store: StaticStore
           ScriptHost: HostContext
@@ -426,6 +450,8 @@ module Pipeline =
                |> Option.defaultValue ""
                yield! splitPath |> Array.tail |]
             |> Path.Combine
+
+        member ctx.RenderedPath() = "$root/rendered" |> ctx.ExpandPath
 
     let deserializeStep (el: JsonElement) =
         match Json.tryGetStringProperty "type" el with
@@ -516,7 +542,7 @@ module Pipeline =
             match step with
             | BuildPageStep.AddPageFragment data ->
                 let path = ctx.ExpandPath data.Path
-                
+
                 match File.Exists path with
                 | true ->
                     ctx.Store.AddPageFragment(
@@ -545,10 +571,9 @@ module Pipeline =
                     ()
             | AddPageData addPageDataBuildStep ->
                 let path = ctx.ExpandPath addPageDataBuildStep.Path
-                
+
                 match File.Exists path with
-                | true ->
-                    ctx.Store.AddPageData(versionRef, File.ReadAllBytes path)
+                | true -> ctx.Store.AddPageData(versionRef, File.ReadAllBytes path)
                 | false ->
                     // TODO handle error?
                     ()
@@ -566,10 +591,55 @@ module Pipeline =
                     |> fun _ ->
                         match PageRenderer.run ctx.Store site action.Name with
                         | Ok p ->
-                            File.WriteAllText(Path.Combine(ctx.ExpandPath "$root/rendered", "index.html"), p)
+                            File.WriteAllText(Path.Combine(ctx.RenderedPath(), $"{page.Name}.html"), p)
                             |> Ok
                         | Error e -> Error $"Error: {e}"
                 | None -> Error $"Page `{action.Name}` not found for site `{site}`."
+
+            attempt fn
+
+        let clearRendered (ctx: PipelineContext) =
+            let fn _ =
+                let rec clearDirectory (di: DirectoryInfo) =
+                    di.GetFiles() |> List.ofSeq |> List.iter (fun fi -> fi.Delete())
+
+                    di.EnumerateDirectories()
+                    |> List.ofSeq
+                    |> List.iter (fun di ->
+                        clearDirectory di
+                        di.Delete())
+
+
+
+                let di = ctx.RenderedPath() |> DirectoryInfo
+
+                di.GetFiles() |> List.ofSeq |> List.iter (fun fi -> fi.Delete())
+                di.GetDirectories() |> List.ofSeq |> List.iter clearDirectory
+
+
+                Ok()
+
+            attempt fn
+
+        let bundle (site: string) (ctx: PipelineContext) (action: BundleSiteAction) =
+            let fn _ =
+                let name =
+                    match action.NameFormat with
+                    | Some nf ->
+                        nf
+                            .Replace("%site_name", site)
+                            .Replace("%timestamp", DateTime.UtcNow.ToString("yyyy_MM_dd-HH_mm_ss"))
+                    | None ->
+                        let timestamp = DateTime.UtcNow.ToString("yyyy_MM_dd-HH_mm_ss")
+                        $"{site}__{timestamp}"
+
+                Compression.ZipFile.CreateFromDirectory(
+                    ctx.RenderedPath(),
+                    Path.Combine(action.OutputPath, $"{name}.zip") |> ctx.ExpandPath,
+                    Compression.CompressionLevel.SmallestSize,
+                    false
+                )
+                |> Ok
 
             attempt fn
 
@@ -584,5 +654,7 @@ module Pipeline =
                     | StepType.CreateDirectories cda -> Actions.createDirectories ctx cda
                     | StepType.CopyResources cra -> Actions.copyResources ctx cra
                     | StepType.RunPluginScript rpsa -> Actions.runPluginScript cfg.Site ctx rpsa
-                    | StepType.BuildPage bpa -> Actions.buildPage cfg.Site ctx bpa))
+                    | StepType.BuildPage bpa -> Actions.buildPage cfg.Site ctx bpa
+                    | ClearRendered -> Actions.clearRendered ctx
+                    | BundleSite bsa -> Actions.bundle cfg.Site ctx bsa))
             (Ok())
