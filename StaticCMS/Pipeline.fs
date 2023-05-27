@@ -609,13 +609,10 @@ module Pipeline =
                         clearDirectory di
                         di.Delete())
 
-
-
                 let di = ctx.RenderedPath() |> DirectoryInfo
 
                 di.GetFiles() |> List.ofSeq |> List.iter (fun fi -> fi.Delete())
                 di.GetDirectories() |> List.ofSeq |> List.iter clearDirectory
-
 
                 Ok()
 
@@ -642,7 +639,6 @@ module Pipeline =
                 |> Ok
 
             attempt fn
-
 
     let run (ctx: PipelineContext) (cfg: PipelineConfiguration) =
         cfg.Steps
