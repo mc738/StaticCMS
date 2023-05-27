@@ -38,7 +38,7 @@ let run storePath site =
             try
                 let store = WikdStore.Create cfg.StorePath
                 
-                Tools.import store Tools.printResult "wikd" cfg.ContentRootPath
+                Tools.import store Tools.printResult "index" cfg.ContentRootPath
 
                 let template = File.ReadAllText cfg.TemplatePath |> Mustache.parse
 
