@@ -29,6 +29,12 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Articulus", "..\Articulus\A
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "StaticCMS.PluginScripts", "StaticCMS.PluginScripts\StaticCMS.PluginScripts.fsproj", "{5B3EC5A2-4DE8-4D37-A3A0-5B31F18AD020}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Documentation", "Documentation", "{D2360F3C-F288-4367-9AFD-9F3566663441}"
+	ProjectSection(SolutionItems) = preProject
+		LICENSE = LICENSE
+		README.md = README.md
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
