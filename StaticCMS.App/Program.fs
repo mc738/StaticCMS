@@ -126,7 +126,6 @@ let initializeSite (options: InitializeSiteOptions) =
             store.AddPage(options.Name, "index", "index") |> ignore
             Directory.CreateDirectory(Path.Combine(root, "data")) |> ignore
             Directory.CreateDirectory(Path.Combine(root, "fragment_templates")) |> ignore
-            Directory.CreateDirectory(Path.Combine(root, "fragment_templates")) |> ignore
             Directory.CreateDirectory(Path.Combine(root, "page_templates")) |> ignore
             Directory.CreateDirectory(Path.Combine(root, "pages")) |> ignore
             Directory.CreateDirectory(Path.Combine(root, "plugins")) |> ignore
