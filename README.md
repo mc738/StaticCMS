@@ -47,4 +47,4 @@ Currently StaticCMS website projects have the following file structure:
 * `$root/pages` - Page data
 * `$root/plugins` - Plugin data
 * `$root/rendered` - The rendered site
-* `$`
+* `$root/resources` - Any resources to used with the site
