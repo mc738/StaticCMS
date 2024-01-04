@@ -4,9 +4,13 @@ A CMS written in F#, designed to manage and generate static websites.
 
 ## Building a website
 
-The build process is comprised of a pipeline of actions. The involve pulling data, creating 
+The build process is comprised of a pipeline of actions.
 
 ### Build configuration
+
+In the sites project directory there is a `build.json` file. 
+
+This contains the build configuration for the site.
 
 ### Build actions
 
