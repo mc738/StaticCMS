@@ -11,9 +11,17 @@ These websites would be static but would need to be updated reasonable often.
 Rather than editing raw `html` it seemed better to be able to create content in `markdown` and generate the pages from
 that (as well as other data sources).
 
-There are multiple existing solutions for this but it seemed like a interesting project 
+There are multiple existing solutions for this but it seemed like a interesting project.
+
+This is not meant to directly compete with them but to solve a problem I had.
 
 ## Philosophy
+
+StaticCMS is designed with the following philosophy in mind:
+
+* The end result should be readable/editable by humans.
+* The process should be extendable.
+* Data/content can come from multiple places and multiple formats. 
 
 ## Building a website
 
