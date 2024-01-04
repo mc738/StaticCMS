@@ -44,4 +44,7 @@ Currently StaticCMS website projects have the following file structure:
 * `$root/data` - a directory used to store data.
 * `$root/fragment_templates` - Templated used in fragments
 * `$root/page_templates` - Page templates
-* `$root/pages` - Page data.
+* `$root/pages` - Page data
+* `$root/plugins` - Plugin data
+* `$root/rendered` - The rendered site
+* `$`
