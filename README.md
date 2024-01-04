@@ -11,6 +11,10 @@ These websites would be static but would need to be updated reasonable often.
 Rather than editing raw `html` it seemed better to be able to create content in `markdown` and generate the pages from
 that (as well as other data sources).
 
+There are multiple existing solutions for this but it seemed like a interesting project 
+
+## Philosophy
+
 ## Building a website
 
 The build process is comprised of a pipeline of actions.
