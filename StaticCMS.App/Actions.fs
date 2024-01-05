@@ -91,7 +91,6 @@ module Actions =
                 if Debugger.IsAttached then
                     agent.Post(LogItemType.Debug(from, message))
     
-    
     open Logging
     
     type AppContext = {
