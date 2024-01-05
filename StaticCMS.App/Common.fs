@@ -1,0 +1,2 @@
+module StaticCMS.App.Common
+
