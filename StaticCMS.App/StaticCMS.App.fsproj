@@ -7,14 +7,20 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Compile Include="Common\Logging.fs" />
+        <Compile Include="Common\Shared.fs" />
+        <Compile Include="Common\Options.fs" />
+        <Folder Include="Actions\" />
         <Compile Include="Actions.fs" />
         <Compile Include="Examples.fs" />
+        <Compile Include="InteractiveMode.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
     <ItemGroup>
       <Content Include=".dockerignore" />
       <Content Include="Dockerfile" />
+      
     </ItemGroup>
 
     <ItemGroup>
