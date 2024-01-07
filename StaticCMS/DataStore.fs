@@ -262,6 +262,8 @@ module DataStore =
         member _.AddSite(name, url, rootPath) = Internal.addSite ctx name url rootPath
 
         member _.GetSite(name) = Internal.getSiteByName ctx name
+        
+        member _.ListSites() = Internal.getAllSites ctx
 
         member _.AddPage(reference, site, name, nameSlug) =
             Internal.addPage ctx reference site name nameSlug
