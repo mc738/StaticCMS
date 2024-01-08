@@ -4,17 +4,6 @@ module Options =
 
     open System.Text.Json.Serialization
     open FsToolbox.AppEnvironment.Args.Mapping
-    
-    [<CLIMutable>]
-    type GeneralSettings =
-        { [<JsonPropertyName("paths")>]
-          Paths: NamedPath seq }
-
-    and [<CLIMutable>] NamedPath =
-        { [<JsonPropertyName("name")>]
-          Name: string
-          [<JsonPropertyName("path")>]
-          Path: string }
 
     type Options =
         | [<CommandValue("init-site")>] InitializeSite of InitializeSiteOptions
@@ -31,6 +20,8 @@ module Options =
           Name: string
           [<ArgValue("-u", "--url")>]
           Url: string
+          [<ArgValue("-d", "--display-name")>]
+          DisplayName: string option
           [<ArgValue("-r", "--root")>]
           Root: string option
           [<ArgValue("-s", "--store")>]
@@ -79,4 +70,3 @@ module Options =
           Path: string
           [<ArgValue("-s", "--store")>]
           StorePath: string option }
-
