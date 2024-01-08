@@ -96,7 +96,6 @@ module Pipeline =
             Json.writeString writer "site" pc.Site
             Json.writeArray (fun w -> pc.Steps |> List.iter (fun s -> s.WriteToJson w)) "steps" writer
 
-
             writer.WriteEndObject()
             writer.Flush()
 
@@ -142,7 +141,7 @@ module Pipeline =
             | RunPluginScript runPluginScriptAction ->
                 writer.WriteString("type", "run-plugin-script")
                 runPluginScriptAction.WriteToJson writer
-            | ClearRendered -> writer.WriteString("type", "clear-directory")
+            | ClearRendered -> writer.WriteString("type", "clear-rendered")
             | BundleSite bundleSiteAction ->
                 writer.WriteString("type", "bundle-site")
                 bundleSiteAction.WriteToJson writer
