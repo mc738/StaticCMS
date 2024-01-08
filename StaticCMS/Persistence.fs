@@ -5,7 +5,7 @@ open System.Text.Json.Serialization
 open Freql.Core.Common
 open Freql.Sqlite
 
-/// Module generated on 25/05/2023 21:00:55 (utc) via Freql.Sqlite.Tools.
+/// Module generated on 08/01/2024 18:23:34 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Records =
     /// A record representing a row in the table `fragment_blob_type`.
@@ -119,7 +119,7 @@ module Records =
 	raw_blob BLOB NOT NULL,
 	hash TEXT NOT NULL,
 	blob_type TEXT NOT NULL,
-	CONSTRAINT page_fragments_PK PRIMARY KEY (version_reference,template),
+	CONSTRAINT page_fragments_PK PRIMARY KEY (version_reference,data_name),
 	CONSTRAINT page_fragments_FK FOREIGN KEY (version_reference) REFERENCES page_versions(reference),
 	CONSTRAINT page_fragments_FK_1 FOREIGN KEY (template) REFERENCES fragment_templates(name),
 	CONSTRAINT page_fragments_FK_2 FOREIGN KEY (blob_type) REFERENCES fragment_blob_type(name)
@@ -510,7 +510,7 @@ module Records =
         static member TableName() = "templates"
     
 
-/// Module generated on 25/05/2023 21:00:55 (utc) via Freql.Tools.
+/// Module generated on 08/01/2024 18:23:34 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Parameters =
     /// A record representing a new row in the table `fragment_blob_type`.
@@ -713,7 +713,7 @@ module Parameters =
               Hash = String.Empty }
     
     
-/// Module generated on 25/05/2023 21:00:55 (utc) via Freql.Tools.
+/// Module generated on 08/01/2024 18:23:34 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Operations =
 
