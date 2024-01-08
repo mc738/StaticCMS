@@ -10,10 +10,18 @@
         <Compile Include="Common\Logging.fs" />
         <Compile Include="Common\Shared.fs" />
         <Compile Include="Common\Options.fs" />
-        <Folder Include="Actions\" />
-        <Compile Include="Actions.fs" />
+        <Compile Include="Actions\Common.fs" />
+        <Compile Include="Actions\Data.fs" />
+        <Compile Include="Actions\AddSite.fs" />
+        <Compile Include="Actions\AddPage.fs" />
+        <Compile Include="Actions\AddPlugin.fs" />
+        <Compile Include="Actions\InitializeSite.fs" />
+        <Compile Include="Actions\ImportTemplate.fs" />
+        <Compile Include="Actions\ImportFragmentTemplate.fs" />
+        <Compile Include="Actions\RenderSite.fs" />
         <Compile Include="Examples.fs" />
         <Compile Include="InteractiveMode.fs" />
+        <Compile Include="InteractiveModeV2.fs" />
         <Compile Include="Program.fs" />
     </ItemGroup>
 
@@ -30,7 +38,9 @@
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="FsToolbox" Version="0.3.3" />
+      <PackageReference Include="FsToolbox" Version="0.6.0" />
+      <PackageReference Include="Spectre.Console" Version="0.48.0" />
+      <PackageReference Include="Spectre.Console.Cli" Version="0.48.0" />
     </ItemGroup>
 
 </Project>
