@@ -49,3 +49,25 @@ Currently StaticCMS website projects have the following file structure:
 * `$root/rendered` - The rendered site
 * `$root/resources` - Any resources to used with the site
 * `$root/build.json` - The build configuration
+
+## Solution Structure
+
+### StaticCMS
+
+This is the core library which handles the basic functionality.
+
+### StaticCMS.Actions
+
+This is a collection of actions build on top of the core library to help simplify common tasks 
+and share functionality between the app and web api.
+
+It can also be seen as a reference library on how to perform common actions like initialize a site 
+or add a page.
+
+### StaticCMS.App
+
+The CLI app project.
+
+### StaticCMS.WebApi
+
+The web api project.
