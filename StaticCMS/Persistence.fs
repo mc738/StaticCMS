@@ -5,7 +5,7 @@ open System.Text.Json.Serialization
 open Freql.Core.Common
 open Freql.Sqlite
 
-/// Module generated on 08/01/2024 18:23:34 (utc) via Freql.Tools.
+/// Module generated on 08/01/2024 18:34:58 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Records =
     /// A record representing a row in the table `fragment_blob_type`.
@@ -453,18 +453,20 @@ module Records =
     type Site =
         { [<JsonPropertyName("name")>] Name: string
           [<JsonPropertyName("rootPath")>] RootPath: string
-          [<JsonPropertyName("url")>] Url: string }
+          [<JsonPropertyName("url")>] Url: string
+          [<JsonPropertyName("displayName")>] DisplayName: string option }
     
         static member Blank() =
             { Name = String.Empty
               RootPath = String.Empty
-              Url = String.Empty }
+              Url = String.Empty
+              DisplayName = None }
     
         static member CreateTableSql() = """
         CREATE TABLE sites (
 	name TEXT NOT NULL,
 	root_path TEXT NOT NULL,
-	url TEXT NOT NULL,
+	url TEXT NOT NULL, display_name TEXT,
 	CONSTRAINT sites_PK PRIMARY KEY (name)
 )
         """
@@ -473,7 +475,8 @@ module Records =
         SELECT
               sites.`name`,
               sites.`root_path`,
-              sites.`url`
+              sites.`url`,
+              sites.`display_name`
         FROM sites
         """
     
@@ -510,7 +513,7 @@ module Records =
         static member TableName() = "templates"
     
 
-/// Module generated on 08/01/2024 18:23:34 (utc) via Freql.Tools.
+/// Module generated on 08/01/2024 18:34:58 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Parameters =
     /// A record representing a new row in the table `fragment_blob_type`.
@@ -693,12 +696,14 @@ module Parameters =
     type NewSite =
         { [<JsonPropertyName("name")>] Name: string
           [<JsonPropertyName("rootPath")>] RootPath: string
-          [<JsonPropertyName("url")>] Url: string }
+          [<JsonPropertyName("url")>] Url: string
+          [<JsonPropertyName("displayName")>] DisplayName: string option }
     
         static member Blank() =
             { Name = String.Empty
               RootPath = String.Empty
-              Url = String.Empty }
+              Url = String.Empty
+              DisplayName = None }
     
     
     /// A record representing a new row in the table `templates`.
@@ -713,7 +718,7 @@ module Parameters =
               Hash = String.Empty }
     
     
-/// Module generated on 08/01/2024 18:23:34 (utc) via Freql.Tools.
+/// Module generated on 08/01/2024 18:34:58 (utc) via Freql.Tools.
 [<RequireQualifiedAccess>]
 module Operations =
 
