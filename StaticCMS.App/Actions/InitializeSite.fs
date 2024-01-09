@@ -20,7 +20,7 @@ module InitializeSite =
 
     let defaultIndexTemplate = "default#index"
 
-    let defaultNavTemplate = "default#nav_bar"
+    let defaultNavTemplate = "default#navbar"
 
     let defaultFeatureCardsTemplate = "default#feature_cards"
 
