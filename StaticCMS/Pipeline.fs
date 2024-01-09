@@ -147,6 +147,15 @@ module Pipeline =
                 bundleSiteAction.WriteToJson writer
 
             writer.WriteEndObject()
+            
+        member st.GetDefaultOrder() =
+            match st with
+            | CreateDirectories directoriesAction -> 1
+            | CopyResources copyResourcesAction -> 2
+            | BuildPage buildPageAction -> 4
+            | RunPluginScript runPluginScriptAction -> 3
+            | ClearRendered -> 0
+            | BundleSite bundleSiteAction -> 5
 
     and CreateDirectoriesAction =
         { Directories: string list }
