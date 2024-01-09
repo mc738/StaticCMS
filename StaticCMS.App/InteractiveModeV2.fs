@@ -29,29 +29,29 @@ module InteractiveModeV2 =
                     match System.String.IsNullOrWhiteSpace name with
                     | true -> ValidationResult.Error "Site name can not be blank"
                     | false -> ValidationResult.Success())
-                
+
         namePrompt.PromptStyle <- "green"
-        
+
         let siteName = AnsiConsole.Prompt(namePrompt)
-        
+
         let urlPrompt =
             TextPrompt<string>("Enter new site url")
                 .Validate(fun name ->
                     match System.String.IsNullOrWhiteSpace name with
                     | true -> ValidationResult.Error "Url name can not be blank"
                     | false -> ValidationResult.Success())
-                
+
         urlPrompt.PromptStyle <- "green"
-        
+
         let url = AnsiConsole.Prompt(urlPrompt)
-        
+
         let rootPrompt =
             TextPrompt<string>("Enter new site root path (if left blank default path will be used)")
-                
+
         rootPrompt.PromptStyle <- "green"
-        
+
         rootPrompt.AllowEmpty <- true
-        
+
         let root = AnsiConsole.Prompt(rootPrompt)
 
         // TODO change display name
@@ -59,17 +59,19 @@ module InteractiveModeV2 =
         |> Result.map (fun _ -> siteName)
 
     let loadSite (ctx: AppContext) =
-        
+
         let sitesSelectionPrompt =
-            SelectionPrompt<string>().AddChoices(ctx.Store.ListSites() |> List.map (fun s -> s.Name))
-            
+            SelectionPrompt<string>()
+                .AddChoices(ctx.Store.ListSites() |> List.map (fun s -> s.Name))
+
         sitesSelectionPrompt.Title <- "Select site"
-        
+
         let siteName = AnsiConsole.Prompt(sitesSelectionPrompt)
-        
+
         match ctx.Store.GetSite siteName with
-            | Some _ -> Ok siteName
-            | None -> Error $"Site `{siteName}` not found"
+        | Some _ -> Ok siteName
+        | None -> Error $"Site `{siteName}` not found"
+
 
     let run _ =
         match createContext None None with
@@ -85,15 +87,24 @@ module InteractiveModeV2 =
                 | "Create new site" -> createSite ctx
                 | "Load existing site" -> loadSite ctx
                 | _ -> Error "Unknown selection"
-            
-            let r =
-                match siteName with
-                | Ok sn -> RenderSite.run ctx sn
-                | Error e -> Error e
 
-            match r with
-            | Ok v -> ()
-            | Error e -> failwith e
-            
-            ()
+            match siteName with
+            | Ok sn ->
+                let rec handle () =
+
+                    let optionsPrompt =
+                        SelectionPrompt<string>().AddChoices([| "Add page"; "Render site" |])
+
+                    match AnsiConsole.Prompt optionsPrompt with
+                    | "Add page" -> ()
+                    | "Render site" ->
+                        match RenderSite.run ctx sn with
+                        | Ok resultValue -> ()
+                        | Error errorValue -> ()
+                    | _ -> failwith "Unknown selection"
+
+                    handle ()
+
+                handle ()
+            | Error e -> AnsiConsole.MarkupInterpolated($"[red]Failed to create or load site. Error: {e}[/]")
         | Error e -> AnsiConsole.MarkupInterpolated($"[red]Failed to create app context. Error: {e}[/]")
