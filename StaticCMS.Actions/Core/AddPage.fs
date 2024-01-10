@@ -11,7 +11,7 @@ module AddPage =
 
     open System.IO
     open StaticCMS.DataStore
-    open StaticCMS.Pipeline
+    open StaticCMS
     open StaticCMS.Actions.Common
     open StaticCMS.Actions.Common.Data
 
@@ -124,84 +124,87 @@ module AddPage =
         ({ Name = parameters.PageName
            Template = defaultArticleTemplate
            Steps =
-             [ { Path = "$root/data/fragments/navbar.json"
-                 Fragment =
-                   { Template = defaultNavTemplate
-                     DataName = "navbar_html"
-                     ContentType = FragmentBlobType.Json } }
-               |> BuildPageStep.AddPageFragment
+             [ ({ Path = "$root/data/fragments/navbar.json"
+                  Fragment =
+                    { Template = defaultNavTemplate
+                      DataName = "navbar_html"
+                      ContentType = FragmentBlobType.Json } }
+               : Pipeline.AddPageFragmentPageBuildStep)
+               |> Pipeline.BuildPageStep.AddPageFragment
 
-               { Path = $"$root/pages/{parameters.PageName}/fragments/body.md"
-                 Fragment =
-                   { Template = "__blank"
-                     DataName = "content"
-                     ContentType = FragmentBlobType.Markdown } }
-               |> BuildPageStep.AddPageFragment
-               BuildPageStep.AddPageData { Path = $"$root/pages/{parameters.PageName}/data.json" } ] }
-        : BuildPageAction)
+               ({ Path = $"$root/pages/{parameters.PageName}/fragments/body.md"
+                  Fragment =
+                    { Template = "__blank"
+                      DataName = "content"
+                      ContentType = FragmentBlobType.Markdown } }
+               : Pipeline.AddPageFragmentPageBuildStep)
+               |> Pipeline.BuildPageStep.AddPageFragment
+               Pipeline.BuildPageStep.AddPageData { Path = $"$root/pages/{parameters.PageName}/data.json" } ] }
+        : Pipeline.BuildPageAction)
 
     let run (ctx: StaticCMSContext) (parameters: Parameters) =
-        match handler ctx parameters with
-        | Ok _ ->
-            // Attempt to update the build script
-            let buildPageAction = createBuildPageAction ctx parameters
-            let buildCfgPath = Path.Combine(parameters.SiteRoot, "build.json")
+        match ctx.Store.GetPage(parameters.SiteName, parameters.PageName) with
+        | Some _ -> ()
+        | None ->
+            match handler ctx parameters with
+            | Ok _ ->
+                // Attempt to update the build script
+                let buildPageAction = createBuildPageAction ctx parameters
+                let buildCfgPath = Path.Combine(parameters.SiteRoot, "build.json")
 
-            match File.Exists buildCfgPath with
-            | true ->
-                match loadConfiguration buildCfgPath with
-                | Ok buildCfg ->
-                    // Create a backup of the current build configuration.
-                    File.WriteAllText($"{buildCfgPath}.bk", buildCfg.Serialize())
-
-                    { buildCfg with
-                        Steps =
-                            buildCfg.Steps @ [ StepType.BuildPage buildPageAction ]
-                            |> List.map (fun s -> s.GetDefaultOrder(), s)
-                            |> List.sortBy fst
-                            |> List.map snd }
-                        .Serialize()
-                    |> fun nbc -> File.WriteAllText(buildCfgPath, nbc)
-
-                | Error _ -> ()
-            | false -> ()
-
-            match parameters.NavigableTo with
-            | true ->
-                // Attempt to add the site to the navbar (if applicable)
-                let navbarDataPath =
-                    Path.Combine(parameters.SiteRoot, "data", "fragments", "navbar.json")
-
-                match File.Exists navbarDataPath with
+                match File.Exists buildCfgPath with
                 | true ->
-                    let navbarData = File.ReadAllText navbarDataPath |> deserializeJson<NavBarData>
+                    match loadConfiguration buildCfgPath with
+                    | Ok buildCfg ->
+                        // Create a backup of the current build configuration.
+                        File.WriteAllText($"{buildCfgPath}.bk", buildCfg.Serialize())
 
-                    { navbarData with
-                        Items =
-                            navbarData.Items
-                            |> Seq.append
-                                [ { Url = $"./{parameters.PageName}.html"
-                                    Title = parameters.PageTitle } ] }
-                    |> serializeJson
-                    |> fun nnd -> File.WriteAllText(navbarDataPath, nnd)
+                        { buildCfg with
+                            Steps =
+                                buildCfg.Steps @ [ Pipeline.StepType.BuildPage buildPageAction ]
+                                |> List.map (fun s -> s.GetDefaultOrder(), s)
+                                |> List.sortBy fst
+                                |> List.map snd }
+                            .Serialize()
+                        |> fun nbc -> File.WriteAllText(buildCfgPath, nbc)
+
+                    | Error _ -> ()
                 | false -> ()
 
-                let navbarEmbeddedDataPath =
-                    Path.Combine(parameters.SiteRoot, "data", "fragments", "navbar_embedded.json")
-
-                match File.Exists navbarEmbeddedDataPath with
+                match parameters.NavigableTo with
                 | true ->
-                    let navbarEmbeddedData =
-                        File.ReadAllText navbarEmbeddedDataPath |> deserializeJson<NavBarData>
+                    // Attempt to add the site to the navbar (if applicable)
+                    let navbarDataPath =
+                        Path.Combine(parameters.SiteRoot, "data", "fragments", "navbar.json")
 
-                    { navbarEmbeddedData with
-                        Items =
-                            navbarEmbeddedData.Items
-                            |> Seq.append
-                                [ { Url = $"../{parameters.PageName}.html"
+                    match File.Exists navbarDataPath with
+                    | true ->
+                        let navbarData = File.ReadAllText navbarDataPath |> deserializeJson<NavBarData>
+
+                        { navbarData with
+                            Items =
+                                [ yield! navbarData.Items
+                                  { Url = $"./{parameters.PageName}.html"
                                     Title = parameters.PageTitle } ] }
-                    |> serializeJson
-                    |> fun nnd -> File.WriteAllText(navbarDataPath, nnd)
+                        |> serializeJson
+                        |> fun nnd -> File.WriteAllText(navbarDataPath, nnd)
+                    | false -> ()
+
+                    let navbarEmbeddedDataPath =
+                        Path.Combine(parameters.SiteRoot, "data", "fragments", "navbar_embedded.json")
+
+                    match File.Exists navbarEmbeddedDataPath with
+                    | true ->
+                        let navbarEmbeddedData =
+                            File.ReadAllText navbarEmbeddedDataPath |> deserializeJson<NavBarData>
+
+                        { navbarEmbeddedData with
+                            Items =
+                                [ yield! navbarEmbeddedData.Items
+                                  { Url = $"../{parameters.PageName}.html"
+                                    Title = parameters.PageTitle } ] }
+                        |> serializeJson
+                        |> fun nnd -> File.WriteAllText(navbarEmbeddedDataPath, nnd)
+                    | false -> ()
                 | false -> ()
-            | false -> ()
-        | Error e -> failwith "TODO"
+            | Error e -> failwith "TODO"
