@@ -4,7 +4,6 @@ open System.IO
 open StaticCMS
 open StaticCMS.Actions.Common
 open StaticCMS.Actions.Common.Data
-open StaticCMS.Pipeline
 
 [<RequireQualifiedAccess>]
 module InitializeSite =
@@ -38,8 +37,8 @@ module InitializeSite =
         Directory.CreateDirectory(Path.Combine(root, "resources", "js")) |> ignore
         Directory.CreateDirectory(Path.Combine(root, "resources", "img")) |> ignore
 
-    let createSite (ctx: StaticCMSContext) (name: string) (url: string) (root: string) =
-        ctx.Store.AddSite(name, url, root)
+    let createSite (ctx: StaticCMSContext) (name: string) (url: string) (root: string) (displayName: string) =
+        ctx.Store.AddSite(name, url, root, displayName)
 
     let addIndexPage (ctx: StaticCMSContext) (siteName: string) (displayName: string) (root: string) =
 
@@ -71,34 +70,38 @@ module InitializeSite =
             ({ Name = "index"
                Template = defaultIndexTemplate
                Steps =
-                 [ { Path = "$root/data/fragments/navbar.json"
-                     Fragment =
-                       { Template = defaultNavTemplate
-                         DataName = "navbar_html"
-                         ContentType = FragmentBlobType.Json } }
-                   |> BuildPageStep.AddPageFragment
+                 [ ({ Path = "$root/data/fragments/navbar.json"
+                      Fragment =
+                        { Template = defaultNavTemplate
+                          DataName = "navbar_html"
+                          ContentType = FragmentBlobType.Json } }
+                   : Pipeline.AddPageFragmentPageBuildStep)
+                   |> Pipeline.BuildPageStep.AddPageFragment
 
-                   { Path = "$root/pages/index/fragments/feature_cards.json"
-                     Fragment =
-                       { Template = defaultFeatureCardsTemplate
-                         DataName = "feature_cards"
-                         ContentType = FragmentBlobType.Json } }
-                   |> BuildPageStep.AddPageFragment
+                   ({ Path = "$root/pages/index/fragments/feature_cards.json"
+                      Fragment =
+                        { Template = defaultFeatureCardsTemplate
+                          DataName = "feature_cards"
+                          ContentType = FragmentBlobType.Json } }
+                   : Pipeline.AddPageFragmentPageBuildStep)
+                   |> Pipeline.BuildPageStep.AddPageFragment
 
-                   { Path = "$root/pages/index/fragments/body.md"
-                     Fragment =
-                       { Template = "__blank"
-                         DataName = "body"
-                         ContentType = FragmentBlobType.Markdown } }
-                   |> BuildPageStep.AddPageFragment
+                   ({ Path = "$root/pages/index/fragments/body.md"
+                      Fragment =
+                        { Template = "__blank"
+                          DataName = "body"
+                          ContentType = FragmentBlobType.Markdown } }
+                   : Pipeline.AddPageFragmentPageBuildStep)
+                   |> Pipeline.BuildPageStep.AddPageFragment
 
-                   { OutputName = "fragments_html"
-                     // TODO add to app initialization
-                     Template = "default_index_body"
-                     Fragments = [ "feature_cards"; "body" ] }
-                   |> BuildPageStep.CombinePageFragments
-                   BuildPageStep.AddPageData { Path = "$root/pages/index/data.json" } ] }
-            : BuildPageAction)
+                   ({ OutputName = "fragments_html"
+                      // TODO add to app initialization
+                      Template = "default_index_body"
+                      Fragments = [ "feature_cards"; "body" ] }
+                   : Pipeline.CombinePageFragmentsPageBuildStep)
+                   |> Pipeline.BuildPageStep.CombinePageFragments
+                   Pipeline.BuildPageStep.AddPageData { Path = "$root/pages/index/data.json" } ] }
+            : Pipeline.BuildPageAction)
         | Error f -> failwith "TODO Handle"
 
     let addExamplePage (ctx: StaticCMSContext) (siteName: string) (displayName: string) (root: string) =
@@ -127,21 +130,23 @@ module InitializeSite =
             ({ Name = "example"
                Template = defaultArticleTemplate
                Steps =
-                 [ { Path = "$root/data/fragments/navbar.json"
-                     Fragment =
-                       { Template = defaultNavTemplate
-                         DataName = "navbar_html"
-                         ContentType = FragmentBlobType.Json } }
-                   |> BuildPageStep.AddPageFragment
+                 [ ({ Path = "$root/data/fragments/navbar.json"
+                      Fragment =
+                        { Template = defaultNavTemplate
+                          DataName = "navbar_html"
+                          ContentType = FragmentBlobType.Json } }
+                   : Pipeline.AddPageFragmentPageBuildStep)
+                   |> Pipeline.BuildPageStep.AddPageFragment
 
-                   { Path = "$root/pages/example/fragments/body.md"
-                     Fragment =
-                       { Template = "__blank"
-                         DataName = "content"
-                         ContentType = FragmentBlobType.Markdown } }
-                   |> BuildPageStep.AddPageFragment
-                   BuildPageStep.AddPageData { Path = "$root/pages/example/data.json" } ] }
-            : BuildPageAction)
+                   ({ Path = "$root/pages/example/fragments/body.md"
+                      Fragment =
+                        { Template = "__blank"
+                          DataName = "content"
+                          ContentType = FragmentBlobType.Markdown } }
+                   : Pipeline.AddPageFragmentPageBuildStep)
+                   |> Pipeline.BuildPageStep.AddPageFragment
+                   Pipeline.BuildPageStep.AddPageData { Path = "$root/pages/example/data.json" } ] }
+            : Pipeline.BuildPageAction)
         | Error e -> failwith "TODO handle"
 
     let addPageFragments (ctx: StaticCMSContext) (root: string) =
@@ -200,28 +205,35 @@ module InitializeSite =
         |> List.iter (fun dr ->
             File.Copy(dr.Path, Path.Combine(root, "resources", dr.CopyTo, Path.GetFileName(dr.Path))))
 
-    let createDefaultBuildConfiguration (name: string) (root: string) (buildPageActions: BuildPageAction list) =
+    let createDefaultBuildConfiguration
+        (name: string)
+        (root: string)
+        (buildPageActions: Pipeline.BuildPageAction list)
+        =
 
         let build =
             ({ Site = name
                Steps =
-                 [ StepType.ClearRendered
-                   { Directories = [ "$root/rendered/css"; "$root/rendered/js"; "$root/rendered/img" ] }
-                   |> StepType.CreateDirectories
-                   { Directories =
+                 [ Pipeline.StepType.ClearRendered
+                   ({ Directories = [ "$root/rendered/css"; "$root/rendered/js"; "$root/rendered/img" ] }
+                   : Pipeline.CreateDirectoriesAction)
+                   |> Pipeline.StepType.CreateDirectories
+                   ({ Directories =
                        [ { From = "$root/resources/css"
                            To = "$root/rendered/css" }
                          { From = "$root/resources/js"
                            To = "$root/rendered/js" }
                          { From = "$root/resources/img"
                            To = "$root/rendered/img" } ]
-                     Files = [] }
-                   |> StepType.CopyResources
-                   yield! buildPageActions |> List.map StepType.BuildPage
-                   { OutputPath = "$root/artifacts"
-                     NameFormat = None }
-                   |> StepType.BundleSite ] }
-            : PipelineConfiguration)
+                      Files = [] }
+                   : Pipeline.CopyResourcesAction)
+                   |> Pipeline.StepType.CopyResources
+                   yield! buildPageActions |> List.map Pipeline.StepType.BuildPage
+                   ({ OutputPath = "$root/artifacts"
+                      NameFormat = None }
+                   : Pipeline.BundleSiteAction)
+                   |> Pipeline.StepType.BundleSite ] }
+            : Pipeline.PipelineConfiguration)
                 .Serialize()
 
         File.WriteAllText(Path.Combine(root, "build.json"), build)
@@ -239,14 +251,15 @@ module InitializeSite =
                 let displayName = parameters.DisplayName |> Option.defaultValue parameters.Name
 
                 createDirectoryStructure ctx root
-                createSite ctx parameters.Name parameters.Url root
-                addPageFragments ctx root
-                copyResources ctx root
-
+                createSite ctx parameters.Name parameters.Url root displayName
+                
                 [ addIndexPage ctx parameters.Name displayName root
                   if ctx.GeneralSettings.IncludeExamplePage then
                       addExamplePage ctx parameters.Name displayName root ]
                 |> createDefaultBuildConfiguration parameters.Name root
+                
+                addPageFragments ctx root
+                copyResources ctx root
                 |> Ok
         with exn ->
             Error $"Failed to initialize site. Error: {exn.Message}"
