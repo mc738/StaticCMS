@@ -9,6 +9,7 @@ open Faaz.ScriptHost
 open FsToolbox.Core
 open StaticCMS.DataStore
 
+[<RequireQualifiedAccess>]
 module Pipeline =
 
     let toPathParts (str: string) = str.Split([| '\\'; '/' |])
