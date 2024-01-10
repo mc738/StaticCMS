@@ -70,10 +70,11 @@ module DataStore =
 
                 ctx
 
-        let addSite ctx name url rootPath =
+        let addSite ctx name url rootPath displayName =
             ({ Name = name
                Url = url
-               RootPath = rootPath }
+               RootPath = rootPath
+               DisplayName = displayName }
             : Parameters.NewSite)
             |> Operations.insertSite ctx
 
@@ -81,6 +82,10 @@ module DataStore =
             Operations.selectSiteRecord ctx [ "WHERE name = @0;" ] [ name ]
 
         let getAllSites (ctx: SqliteContext) = Operations.selectSiteRecords ctx [] []
+
+
+        let deleteSite (ctx: SqliteContext) (name: string) =
+            ctx.ExecuteVerbatimNonQueryAnon("DELETE FROM sites WHERE name = @0", [ name ])
 
         let addPage ctx reference site name nameSlug =
             ({ Reference = reference
@@ -95,6 +100,12 @@ module DataStore =
 
         let getSitePages (ctx: SqliteContext) (site: string) =
             Operations.selectPageRecords ctx [ "WHERE site = @0;" ] [ site ]
+
+        let deletePage (ctx: SqliteContext) (reference: string) =
+            ctx.ExecuteVerbatimNonQueryAnon("DELETE FROM pages WHERE reference = @0", [ reference ])
+
+        let deleteSitePages (ctx: SqliteContext) (site: string) =
+            ctx.ExecuteVerbatimNonQueryAnon("DELETE FROM pages WHERE site = @0", [ site ])
 
         let addTemplate (ctx: SqliteContext) (name: string) (raw: BlobField) (hash: string) =
             ({ Name = name
@@ -111,6 +122,9 @@ module DataStore =
                 ctx
                 [ "WHERE page_reference = @0"; "ORDER BY version DESC LIMIT 1" ]
                 [ pageReference ]
+
+        let getPageVersions (ctx: SqliteContext) (pageReference: string) =
+            Operations.selectPageVersionRecords ctx [ "WHERE page_reference = @0" ] [ pageReference ]
 
         let addPageVersion
             (ctx: SqliteContext)
@@ -135,6 +149,9 @@ module DataStore =
             : Parameters.NewPageVersion)
             |> Operations.insertPageVersion ctx
 
+        let deletePageVersions (ctx: SqliteContext) (pageReference: string) =
+            ctx.ExecuteVerbatimNonQueryAnon("DELETE FROM page_versions WHERE page_reference = @0", [ pageReference ])
+
         let addPageFragment (ctx: SqliteContext) versionReference template dataName raw hash blobType =
             ({ VersionReference = versionReference
                Template = template
@@ -153,6 +170,12 @@ module DataStore =
 
         let getPageFragments (ctx: SqliteContext) (versionReference: string) =
             Operations.selectPageFragmentRecords ctx [ "WHERE version_reference = @0;" ] [ versionReference ]
+
+        let deletePageFragments (ctx: SqliteContext) (versionReference: string) =
+            ctx.ExecuteVerbatimNonQueryAnon(
+                "DELETE FROM page_fragments WHERE version_reference = @0",
+                [ versionReference ]
+            )
 
         let addFragmentTemplate (ctx: SqliteContext) (name: string) (template: BlobField) (hash: string) =
             ({ Name = name
@@ -178,6 +201,9 @@ module DataStore =
             : Parameters.NewSitePlugin)
             |> Operations.insertSitePlugin ctx
 
+        let deleteSitePlugins (ctx: SqliteContext) (site: string) =
+            ctx.ExecuteVerbatimNonQueryAnon("DELETE FROM site_plugins WHERE site = @0", [ site ])
+
         let getPluginResource (ctx: SqliteContext) (plugin: string) (name: string) =
             Operations.selectPluginResourcesRecord ctx [ "WHERE plugin = @0 AND name = @1" ] [ plugin; name ]
 
@@ -197,6 +223,9 @@ module DataStore =
 
         let getPageData (ctx: SqliteContext) (versionReference: string) =
             Operations.selectPageDataRecords ctx [ "WHERE version_reference = @0;" ] [ versionReference ]
+
+        let deletePageData (ctx: SqliteContext) (versionReference: string) =
+            ctx.ExecuteVerbatimNonQueryAnon("DELETE FROM page_data WHERE version_reference = @0", [ versionReference ])
 
     type StoreOperationFailure =
         { Message: string
@@ -259,11 +288,35 @@ module DataStore =
 
         member _.Path = path
 
-        member _.AddSite(name, url, rootPath) = Internal.addSite ctx name url rootPath
+        member _.AddSite(name, url, rootPath, ?displayName) =
+            Internal.addSite ctx name url rootPath displayName
 
         member _.GetSite(name) = Internal.getSiteByName ctx name
-        
+
         member _.ListSites() = Internal.getAllSites ctx
+
+        member _.DeleteSite(site: Records.Site) =
+            ctx.ExecuteInTransaction(fun t ->
+                Internal.getSitePages t site.Name
+                |> List.iter (fun p ->
+                    // Delete page fragments.
+                    Internal.getPageVersions t p.Reference
+                    |> List.iter (fun pv ->
+                        Internal.deletePageFragments t pv.Reference |> ignore
+                        Internal.deletePageData t pv.Reference |> ignore)
+
+                    Internal.deletePageVersions t p.Reference |> ignore)
+
+                Internal.deleteSitePages t site.Name |> ignore
+                Internal.deleteSitePlugins t site.Name |> ignore
+                Internal.deleteSite t site.Name |> ignore)
+
+
+        member s.DeleteSite(name) =
+            match Internal.getSiteByName ctx name with
+            | Some site -> s.DeleteSite site
+            | None -> Ok()
+
 
         member _.AddPage(reference, site, name, nameSlug) =
             Internal.addPage ctx reference site name nameSlug
