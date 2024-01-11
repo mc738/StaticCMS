@@ -7,17 +7,18 @@ open StaticCMS
 open StaticCMS.App.Actions.Data
 open StaticCMS.App.Common
 open StaticCMS.DataStore
-open StaticCMS.Pipeline
+open StaticCMS.Actions.Site
 
 module InitializeSite =
 
     open System.IO
     open StaticCMS.App.Common.Options
     open StaticCMS.DataStore
-    open StaticCMS.Pipeline
     open StaticCMS.App.Common
     open StaticCMS.App.Actions.Data
 
+    let notInUse = ()
+    (*
     let defaultIndexTemplate = "default#index"
 
     let defaultNavTemplate = "default#navbar"
@@ -254,10 +255,14 @@ module InitializeSite =
         File.WriteAllText(Path.Combine(root, "build.json"), build)
 
     let run (ctx: AppContext) (name: string) (url: string) (displayName: string option) (root: string option) =
+        
+        
         try
             match ctx.Store.GetSite name with
             | Some _ -> Error $"Site `{name}` already exists"
             | None ->
+                
+                
 
                 let root =
                     root
@@ -291,3 +296,4 @@ module InitializeSite =
         //run store options.Name options.Url options.DisplayName options.Root
         with exn ->
             Error $"Failed to initialize site. Error: {exn.Message}"
+    *)
