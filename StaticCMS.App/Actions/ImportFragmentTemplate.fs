@@ -8,6 +8,9 @@ module ImportFragmentTemplate =
     open StaticCMS.App.Common
     open StaticCMS.App.Common.Options
         
+    let notInUse = ()
+    
+    (*  
     let action (options: ImportFragmentTemplateOptions) =
         try
             match File.Exists options.Path with
@@ -22,5 +25,5 @@ module ImportFragmentTemplate =
             | false -> Error $"File `{options.Path}` does not exist"
         with exn ->
             Error $"Failed to import template. Error: {exn.Message}"
-
+    *)
 
