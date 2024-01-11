@@ -7,6 +7,9 @@ module ImportTemplate =
     open StaticCMS.App.Common
     open StaticCMS.App.Common.Options    
     
+    let notInUse = ()
+    
+    (*
     let action (options: ImportTemplateOptions) =
         try
             match File.Exists options.Path with
@@ -22,3 +25,4 @@ module ImportTemplate =
         with exn ->
             Error $"Failed to import template. Error: {exn.Message}"
 
+    *)
