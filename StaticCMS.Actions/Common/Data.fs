@@ -1,4 +1,4 @@
-module StaticCMS.Actions.Common
+namespace StaticCMS.Actions.Common
 
 module Data =
 
