@@ -1,8 +1,7 @@
-namespace StaticCMS.Actions.Core
+namespace StaticCMS.Actions.Site
 
 open System.IO
 open StaticCMS.Actions.Common
-open StaticCMS.Actions.Core.RenderSite
 
 [<RequireQualifiedAccess>]
 module DeleteSite =
