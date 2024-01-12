@@ -13,26 +13,17 @@ module InteractiveMode =
     open StaticCMS.App.Common.Logging
     //open StaticCMS.App.Actions
     open StaticCMS.App.Common
-    open StaticCMS.Actions.Core
+    open StaticCMS.Actions.Site
 
     let textPrompt prompt (optional: bool) =
         let tp = TextPrompt<string>(prompt)
-        
+
         tp.PromptStyle <- "green"
+
         if optional then
             tp.AllowEmpty <- true
-            
-        AnsiConsole.Prompt(tp) 
-    
-    
-    let createContext (storePath: string option) (generalSettingsPath: string option) (logger: LogItem -> unit) =
 
-        getGeneralSettings generalSettingsPath
-        |> Result.map (fun gs ->
-
-            { Store = StaticStore.Create <| getStorePath storePath
-              Logger = logger
-              GeneralSettings = gs })
+        AnsiConsole.Prompt(tp)
 
     let createSite (ctx: StaticCMSContext) =
 
@@ -133,12 +124,12 @@ module InteractiveMode =
                         let pageName = textPrompt "Enter new page name: " false
                         let pageNameSlug = textPrompt "Enter new page name slug: " false
                         let pageTitle = textPrompt "Enter new page title: " false
-                        
+
                         let includeDefaultStyles = AnsiConsole.Ask<bool>("Include default styles?")
                         let includeDefaultScripts = AnsiConsole.Ask<bool>("Include default scripts?")
-                        let navigableTo = AnsiConsole.Ask<bool>("Page is navigable to?") 
-                        
-                        
+                        let navigableTo = AnsiConsole.Ask<bool>("Page is navigable to?")
+
+
                         let status = AnsiConsole.Status()
 
                         //status.AutoRefresh <- false
@@ -184,6 +175,27 @@ module InteractiveMode =
 
                             handle ()
                         | Error errorValue -> ()
+                    | "Add plugin" ->
+
+                        let pluginSelectionPrompt =
+                            SelectionPrompt<string>()
+                                .AddChoices(ctx.Store.ListPlugins() |> List.map (fun s -> s.Name))
+
+                        pluginSelectionPrompt.Title <- "Select site"
+                        pluginSelectionPrompt.PageSize <- 10
+
+                        let plugin = AnsiConsole.Prompt<string>(pluginSelectionPrompt)
+
+                        match
+                            AddPlugin.run
+                                ctx
+                                { SiteName = s.Name
+                                  SiteRoot = s.RootPath
+                                  PluginName = plugin }
+                        with
+                        | Ok _ -> ()
+                        | Error e -> ()
+
                     | "[red]Delete site[/]" ->
                         let confirmationPrompt =
                             TextPrompt<string>(
