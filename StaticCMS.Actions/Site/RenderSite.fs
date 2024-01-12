@@ -1,4 +1,4 @@
-namespace StaticCMS.Actions.Core
+namespace StaticCMS.Actions.Site
 
 open StaticCMS.Actions.Common
 
