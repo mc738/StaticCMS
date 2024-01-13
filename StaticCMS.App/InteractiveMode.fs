@@ -115,7 +115,7 @@ module InteractiveMode =
 
                     let optionsPrompt =
                         SelectionPrompt<string>()
-                            .AddChoices([| "Add page"; "Render site"; "[red]Delete site[/]" |])
+                            .AddChoices([| "Add page"; "Render site"; "Add plugin"; "[red]Delete site[/]" |])
 
                     let selection = AnsiConsole.Prompt optionsPrompt
 
