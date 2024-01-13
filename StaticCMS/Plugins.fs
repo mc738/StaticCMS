@@ -89,10 +89,10 @@ module Plugins =
           OutputPath: string }
 
         static member TryFromJson(element: JsonElement) =
-            match Json.tryGetStringProperty "path" element, Json.tryGetStringProperty "output" element with
+            match Json.tryGetStringProperty "path" element, Json.tryGetStringProperty "outputPath" element with
             | Some p, Some o -> Ok { Path = p; OutputPath = o }
             | None, _ -> Error "Missing `path` property"
-            | _, None -> Error "Missing `output` property"
+            | _, None -> Error "Missing `outputPath` property"
 
     and CopyDirectoryInitializeStep =
         { Path: string
@@ -100,14 +100,14 @@ module Plugins =
           Recursive: bool }
 
         static member TryFromJson(element: JsonElement) =
-            match Json.tryGetStringProperty "path" element, Json.tryGetStringProperty "output" element with
+            match Json.tryGetStringProperty "path" element, Json.tryGetStringProperty "outputPath" element with
             | Some p, Some o ->
                 Ok
                     { Path = p
                       OutputPath = o
                       Recursive = Json.tryGetBoolProperty "recursive" element |> Option.defaultValue false }
             | None, _ -> Error "Missing `path` property"
-            | _, None -> Error "Missing `output` property"
+            | _, None -> Error "Missing `outputPath` property"
 
     and CreateFileFromTemplateInitializeStep =
         { Path: string
@@ -162,7 +162,9 @@ module Plugins =
                 Json.tryGetStringProperty "name" json,
                 Json.tryGetStringProperty "script" json,
                 Json.tryGetStringProperty "function" json,
-                Pipeline.PluginReturnType.TryDeserialize json
+                Json.tryGetProperty "returnType" json
+                |> Option.map Pipeline.PluginReturnType.TryDeserialize
+                |> Option.defaultValue (Error "Missing `returnType` property")
             with
             | Some n, Some s, Some f, Ok rt ->
                 { Name = n
@@ -246,7 +248,7 @@ module Plugins =
                             match copyDirectoryInitializeStep.Recursive with
                             | true ->
                                 let rec handle (source: DirectoryInfo) (target: DirectoryInfo) =
-                                    target.CreateSubdirectory(source.Name) |> ignore
+                                    //target.CreateSubdirectory(source.Name) |> ignore
 
                                     source.GetFiles()
                                     |> Seq.iter (fun fi ->
@@ -265,18 +267,22 @@ module Plugins =
                     | InitializeStep.CreateFileFromTemplate fileFromTemplateInitializeStep ->
                         try
                             let template =
-                                File.ReadAllText(fileFromTemplateInitializeStep.Path) |> Mustache.parse
+                                File.ReadAllText(expandPath knownPaths fileFromTemplateInitializeStep.Path)
+                                |> Mustache.parse
 
                             { Mustache.Data.Empty() with
                                 Values =
                                     fileFromTemplateInitializeStep.Data
                                     |> Map.map (fun _ v ->
+                                        let value = expandPath knownPaths v
+
                                         match fileFromTemplateInitializeStep.EncodingType with
-                                        | TemplateDataEncodingType.Json -> JsonEncodedText.Encode v |> string
-                                        | TemplateDataEncodingType.None -> v
+                                        | TemplateDataEncodingType.Json -> JsonEncodedText.Encode value |> string
+                                        | TemplateDataEncodingType.None -> value
                                         |> Mustache.Value.Scalar) }
                             |> fun d -> Mustache.replace d false template
-                            |> fun f -> File.WriteAllText(fileFromTemplateInitializeStep.OutputPath, f)
+                            |> fun f ->
+                                File.WriteAllText(expandPath knownPaths fileFromTemplateInitializeStep.OutputPath, f)
                             |> Ok
                         with ex ->
                             Error $"Unhandled exception while creating file from template. Error: {ex.Message}"
