@@ -20,6 +20,6 @@ module AddPlugin =
         
         Plugins.Settings.Load pluginCfg
         |> Result.bind (fun cfg ->
-            Plugins.initializePlugin cfg.Initialization ctx.RootPath parameters.SiteName)
+            Plugins.initializePlugin cfg.Initialization.Steps ctx.RootPath parameters.SiteRoot)
         
     
