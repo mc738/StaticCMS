@@ -12,7 +12,26 @@ module Plugins =
 
     type Settings =
 
-        { Initialization: InitializeStep list }
+        { Initialization: PluginInitialize }
+
+        static member TryFromJson(element: JsonElement) =
+            match Json.tryGetProperty "initialize" element with
+            | Some el -> PluginInitialize.TryFromJson el
+            | None -> Error "Missing `initialize` property"
+
+        static member Load(path: string) =
+            try
+                match File.Exists path with
+                | true ->
+                    (File.ReadAllText path |> JsonDocument.Parse).RootElement
+                    |> Settings.TryFromJson
+                | false -> Error $"File `{path}` does not exist"
+            with ex ->
+                Error $"Unhandled exception while loading plugin settings. Error: {ex.Message}"
+
+    and PluginInitialize =
+        { Args: InitializeArg list
+          Steps: InitializeStep list }
 
         static member TryFromJson(element: JsonElement) =
             match Json.tryGetArrayProperty "initialize" element with
@@ -33,19 +52,10 @@ module Plugins =
                             [ "Failed to deserialize the plugin settings. Errors:"; yield! e ]
                             |> String.concat Environment.NewLine
                         )
-                |> Result.map (fun s -> { Initialization = s })
-            | None -> Ok { Initialization = [] }
+                |> Result.map (fun s -> { Args = []; Steps = s })
+            | None -> Ok { Args = []; Steps = [] }
 
-        static member Load(path: string) =
-            try
-                match File.Exists path with
-                | true ->
-                    (File.ReadAllText path |> JsonDocument.Parse).RootElement
-                    |> Settings.TryFromJson
-                | false -> Error $"File `{path}` does not exist"
-            with ex ->
-                Error $"Unhandled exception while loading plugin settings. Error: {ex.Message}"
-
+    and InitializeArg = { Name: string }
 
     and [<RequireQualifiedAccess>] InitializeStep =
         | CreateDirectory of CreateDirectoryInitializeStep
@@ -205,6 +215,15 @@ module Plugins =
             match str.ToLower() with
             | "zip" -> Some ArchiveCompressionType.Zip
             | _ -> None
+
+
+    type InitializePluginParameters =
+        { Steps: InitializeStep list
+          Args: (string * string) list
+          SiteName: string
+          SiteDisplayName: string
+          StaticCMSRoot: string
+          SiteRoot: string }
 
     let createKnownPaths (staticCMSRoot: string) (siteRoot: string) =
         [ "$root", siteRoot
