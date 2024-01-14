@@ -12,7 +12,7 @@ open StaticCMS.DataStore
 [<RequireQualifiedAccess>]
 module Pipeline =
 
-    let toPathParts (str: string) = str.Split([| '\\'; '/' |])
+    //let toPathParts (str: string) = str.Split([| '\\'; '/' |])
 
     let collectErrors (results: Result<'T, string> list) =
         results
@@ -148,7 +148,7 @@ module Pipeline =
                 bundleSiteAction.WriteToJson writer
 
             writer.WriteEndObject()
-            
+
         member st.GetDefaultOrder() =
             match st with
             | CreateDirectories directoriesAction -> 1
@@ -440,6 +440,18 @@ module Pipeline =
             writer.WriteString("outputPath", bsa.OutputPath)
             bsa.NameFormat |> Option.iter (fun nf -> writer.WriteString("nameFormat", nf))
 
+    // TODO add deserialization/write to json.
+    and RunProgramAction =
+        { Name: string
+          Args: ProgramArg list
+          StartDirectory: string option
+          SuccessExitCodes: int list }
+
+    and ProgramArg =
+        { Name: string
+          Value: string option
+          ExpandablePath: bool }
+
     type PipelineContext =
         { Store: StaticStore
           ScriptHost: HostContext
@@ -450,15 +462,7 @@ module Pipeline =
               ScriptHost = scriptHost
               KnownPaths = knownPaths }
 
-        member ctx.ExpandPath(path: string) =
-            let splitPath = toPathParts path
-
-            [| splitPath
-               |> Array.tryHead
-               |> Option.map (fun p -> ctx.KnownPaths.TryFind p |> Option.defaultValue p)
-               |> Option.defaultValue ""
-               yield! splitPath |> Array.tail |]
-            |> Path.Combine
+        member ctx.ExpandPath(path: string) = expandPath ctx.KnownPaths path
 
         member ctx.RenderedPath() = "$root/rendered" |> ctx.ExpandPath
 
@@ -481,16 +485,6 @@ module Pipeline =
     let loadConfiguration (path: string) =
         JsonDocument.Parse(File.ReadAllText path).RootElement
         |> PipelineConfiguration.Deserialize
-
-    let expandPath (knownPaths: Map<string, string>) (path: string) =
-        let splitPath = toPathParts path
-
-        [| splitPath
-           |> Array.tryHead
-           |> Option.map (fun p -> knownPaths.TryFind p |> Option.defaultValue p)
-           |> Option.defaultValue ""
-           yield! splitPath |> Array.tail |]
-        |> Path.Combine
 
     module Actions =
 
@@ -648,6 +642,25 @@ module Pipeline =
                 |> Ok
 
             attempt fn
+
+    let runProgram (ctx: PipelineContext) (action: RunProgramAction) =
+        // TODO update to handle exit codes - use new version in FsToolbox
+
+        try
+            ({ Name = action.Name
+               Args =
+                 action.Args
+                 |> List.map (fun a ->
+                     match a.Value with
+                     | Some v -> $"{a.Name} {if a.ExpandablePath then ctx.ExpandPath v else v}"
+                     | None -> a.Name)
+                 |> String.concat " "
+               StartDirectory = action.StartDirectory }
+            : Processes.Process.ProcessParameters)
+            |> Processes.Process.run
+            |> Result.map (fun _ -> ())
+        with ex ->
+            Error $"Unhandled exception while running program. Error: {ex.Message}"
 
     let run (ctx: PipelineContext) (cfg: PipelineConfiguration) =
         cfg.Steps
