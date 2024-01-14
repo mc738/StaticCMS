@@ -8,7 +8,8 @@ open StaticCMS.App.Common.Options
 let args = Environment.GetCommandLineArgs()
 
 match args.Length > 1 with
-| true ->
+| true -> failwith "TODO"
+    (*
     let options =
         Environment.GetCommandLineArgs()
         |> List.ofArray
@@ -30,7 +31,8 @@ match args.Length > 1 with
     match result with
     | Ok _ -> ()
     | Error e -> ConsoleIO.printError e
-| false -> InteractiveModeV2.run ()
+    *)
+| false -> InteractiveMode.run ()
 
 // For more information see https://aka.ms/fsharp-console-apps
 //printfn "Hello from F#"
