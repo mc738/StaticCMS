@@ -194,6 +194,9 @@ module DataStore =
         let getPlugin (ctx: SqliteContext) (name: string) =
             Operations.selectPluginRecord ctx [ "WHERE name = @0" ] [ name ]
 
+        let getPlugins (ctx: SqliteContext) =
+            Operations.selectPluginRecords ctx [] []
+
         let addSitePlugin (ctx: SqliteContext) (site: string) (plugin: string) (config: BlobField) =
             ({ Site = site
                Plugin = plugin
@@ -311,12 +314,10 @@ module DataStore =
                 Internal.deleteSitePlugins t site.Name |> ignore
                 Internal.deleteSite t site.Name |> ignore)
 
-
         member s.DeleteSite(name) =
             match Internal.getSiteByName ctx name with
             | Some site -> s.DeleteSite site
             | None -> Ok()
-
 
         member _.AddPage(reference, site, name, nameSlug) =
             Internal.addPage ctx reference site name nameSlug
@@ -391,6 +392,8 @@ module DataStore =
         member _.AddPlugin(name, pluginType) = Internal.addPlugin ctx name pluginType
 
         member _.GetPlugin(name) = Internal.getPlugin ctx name
+
+        member _.ListPlugins() = Internal.getPlugins ctx
 
         member _.AddSitePlugin(site, plugin, configuration: string) =
             use ms = new MemoryStream(configuration |> Encoding.UTF8.GetBytes)
@@ -488,6 +491,9 @@ module DataStore =
 
         static member Open(path: string) =
             SqliteContext.Open path |> StaticStoreReader
+
+        member _.GetSiteRoot(site) =
+            Internal.getSiteByName ctx site |> Option.map (fun s -> s.RootPath)
 
         member _.GetSitePluginConfiguration(site, plugin) =
             Internal.getSitePlugin ctx site plugin
