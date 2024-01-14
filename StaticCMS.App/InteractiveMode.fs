@@ -2,7 +2,9 @@ namespace StaticCMS.App
 
 open System
 open System.ComponentModel.DataAnnotations
+open System.IO
 open Spectre.Console
+open StaticCMS
 open StaticCMS.Actions.Common
 open StaticCMS.App.Common
 
@@ -181,18 +183,31 @@ module InteractiveMode =
                             SelectionPrompt<string>()
                                 .AddChoices(ctx.Store.ListPlugins() |> List.map (fun s -> s.Name))
 
-                        pluginSelectionPrompt.Title <- "Select site"
+                        pluginSelectionPrompt.Title <- "Select a plugin"
                         pluginSelectionPrompt.PageSize <- 10
 
                         let plugin = AnsiConsole.Prompt<string>(pluginSelectionPrompt)
 
-                        match
-                            AddPlugin.run
-                                ctx
-                                { SiteName = s.Name
-                                  SiteRoot = s.RootPath
-                                  PluginName = plugin }
-                        with
+                        let pluginCfg = Path.Combine(ctx.RootPath, "plugins", plugin, "settings.json")
+
+                        let result =
+                            Plugins.Settings.Load pluginCfg
+                            |> Result.bind (fun cfg ->
+                                let args =
+                                    cfg.Initialization.Args
+                                    |> List.map (fun a ->
+                                        let argValue = textPrompt $"Enter a value for `{a.Name}`: " false
+
+                                        a.Name, argValue)
+
+                                AddPlugin.run
+                                    ctx
+                                    { Site = s
+                                      PluginName = plugin
+                                      Args = args
+                                      PluginSettings = cfg })
+
+                        match result with
                         | Ok _ -> ()
                         | Error e -> ()
 
