@@ -16,7 +16,9 @@ module Plugins =
 
         static member TryFromJson(element: JsonElement) =
             match Json.tryGetProperty "initialize" element with
-            | Some el -> PluginInitialize.TryFromJson el
+            | Some el ->
+                PluginInitialize.TryFromJson el
+                |> Result.map (fun pi -> { Initialization = pi })
             | None -> Error "Missing `initialize` property"
 
         static member Load(path: string) =
@@ -34,7 +36,7 @@ module Plugins =
           Steps: InitializeStep list }
 
         static member TryFromJson(element: JsonElement) =
-            match Json.tryGetArrayProperty "initialize" element with
+            match Json.tryGetArrayProperty "steps" element with
             | Some ap ->
                 ap
                 |> List.map InitializeStep.TryFromJson
@@ -52,10 +54,28 @@ module Plugins =
                             [ "Failed to deserialize the plugin settings. Errors:"; yield! e ]
                             |> String.concat Environment.NewLine
                         )
-                |> Result.map (fun s -> { Args = []; Steps = s })
+                |> Result.map (fun s ->
+                    { Args =
+                        Json.tryGetArrayProperty "args" element
+                        |> Option.map (fun ap -> ap |> List.choose InitializeArg.TryOptionFromJson)
+                        |> Option.defaultValue []
+                      Steps = s })
             | None -> Ok { Args = []; Steps = [] }
 
-    and InitializeArg = { Name: string }
+    and InitializeArg =
+        { Name: string
+          DefaultValue: string option
+          PromptHint: string option }
+
+        static member TryOptionFromJson(element: JsonElement) =
+            match Json.tryGetStringProperty "name" element with
+            | Some name ->
+                Some
+                    { Name = name
+                      DefaultValue = None
+                      PromptHint = None }
+            | None -> None
+
 
     and [<RequireQualifiedAccess>] InitializeStep =
         | CreateDirectory of CreateDirectoryInitializeStep
@@ -233,11 +253,20 @@ module Plugins =
         |> Map.ofList
 
 
-    let initializePlugin (steps: InitializeStep list) (staticCMSRoot: string) (siteRoot: string) =
+    let initializePlugin (parameters: InitializePluginParameters) =
         // First find the init.json file
-        let knownPaths = createKnownPaths staticCMSRoot siteRoot
+        let knownPaths = createKnownPaths parameters.StaticCMSRoot parameters.SiteRoot
 
-        steps
+        let args =
+            [ "site_name", parameters.SiteName
+              "site_display_name", parameters.SiteDisplayName
+              yield! parameters.Args ]
+            |> Map.ofList
+
+        let replacementHandler (str: string) =
+            replaceArgs args str |> expandPath knownPaths
+
+        parameters.Steps
         |> List.fold
             (fun r s ->
                 r
@@ -245,7 +274,7 @@ module Plugins =
                     match s with
                     | InitializeStep.CreateDirectory createDirectoryInitializeStep ->
                         try
-                            Directory.CreateDirectory(expandPath knownPaths createDirectoryInitializeStep.Path)
+                            Directory.CreateDirectory(replacementHandler createDirectoryInitializeStep.Path)
                             |> ignore
                             |> Ok
                         with ex ->
@@ -253,16 +282,16 @@ module Plugins =
                     | InitializeStep.CopyFile copyFileInitializeStep ->
                         try
                             File.Copy(
-                                expandPath knownPaths copyFileInitializeStep.Path,
-                                expandPath knownPaths copyFileInitializeStep.OutputPath
+                                replacementHandler copyFileInitializeStep.Path,
+                                replacementHandler copyFileInitializeStep.OutputPath
                             )
                             |> Ok
                         with ex ->
                             Error $"Unhandled exception while copying file. Error: {ex.Message}"
                     | InitializeStep.CopyDirectory copyDirectoryInitializeStep ->
                         try
-                            let output = expandPath knownPaths copyDirectoryInitializeStep.OutputPath
-                            let path = expandPath knownPaths copyDirectoryInitializeStep.Path
+                            let output = replacementHandler copyDirectoryInitializeStep.OutputPath
+                            let path = replacementHandler copyDirectoryInitializeStep.Path
 
                             match copyDirectoryInitializeStep.Recursive with
                             | true ->
@@ -286,14 +315,14 @@ module Plugins =
                     | InitializeStep.CreateFileFromTemplate fileFromTemplateInitializeStep ->
                         try
                             let template =
-                                File.ReadAllText(expandPath knownPaths fileFromTemplateInitializeStep.Path)
+                                File.ReadAllText(replacementHandler fileFromTemplateInitializeStep.Path)
                                 |> Mustache.parse
 
                             { Mustache.Data.Empty() with
                                 Values =
                                     fileFromTemplateInitializeStep.Data
                                     |> Map.map (fun _ v ->
-                                        let value = expandPath knownPaths v
+                                        let value = replacementHandler v
 
                                         match fileFromTemplateInitializeStep.EncodingType with
                                         | TemplateDataEncodingType.Json -> JsonEncodedText.Encode value |> string
@@ -301,19 +330,19 @@ module Plugins =
                                         |> Mustache.Value.Scalar) }
                             |> fun d -> Mustache.replace d false template
                             |> fun f ->
-                                File.WriteAllText(expandPath knownPaths fileFromTemplateInitializeStep.OutputPath, f)
+                                File.WriteAllText(replacementHandler fileFromTemplateInitializeStep.OutputPath, f)
                             |> Ok
                         with ex ->
                             Error $"Unhandled exception while creating file from template. Error: {ex.Message}"
                     | InitializeStep.AddBuildStep addBuildStepInitializeStep ->
-                        let buildCfgPath = Path.Combine(siteRoot, "build.json")
+                        let buildCfgPath = Path.Combine(parameters.SiteRoot, "build.json")
 
                         match Pipeline.loadConfiguration buildCfgPath with
                         | Ok buildCfg ->
                             try
                                 let buildStep =
                                     ({ Name = addBuildStepInitializeStep.Name
-                                       Script = addBuildStepInitializeStep.Script
+                                       Script = replacementHandler addBuildStepInitializeStep.Script
                                        Function = addBuildStepInitializeStep.Function
                                        ReturnType = addBuildStepInitializeStep.ReturnType }
                                     : Pipeline.RunPluginScriptAction)
@@ -337,8 +366,8 @@ module Plugins =
                             match extractArchiveInitializeStep.CompressionType with
                             | ArchiveCompressionType.Zip ->
                                 Compression.unzip
-                                    (expandPath knownPaths extractArchiveInitializeStep.ArchivePath)
-                                    (expandPath knownPaths extractArchiveInitializeStep.OutputPath)
+                                    (replacementHandler extractArchiveInitializeStep.ArchivePath)
+                                    (replacementHandler extractArchiveInitializeStep.OutputPath)
                                 |> Ok
                         with ex ->
                             Error $"Unhandled exception while extracting archive. Error: {ex.Message}"))
