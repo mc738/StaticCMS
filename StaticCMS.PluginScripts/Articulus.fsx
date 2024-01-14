@@ -170,6 +170,13 @@ let createFragment (fragmentData: FragmentDataItem list) =
 //|> JsonSerializer.Serialize
 //|> fun fdj -> File.WriteAllText("C:\\ProjectData\\static_cms\\sites\\Freql\\fragments\\news.json", fdj)
 
+let initialize storePath site =
+    let store = StaticStoreReader.Open storePath
+    
+    
+    
+    ()
+
 let run storePath site =
     let store = StaticStoreReader.Open storePath
 
