@@ -3,6 +3,7 @@
 open System
 open System.IO
 open System.Security.Cryptography
+open System.Text.RegularExpressions
 
 [<AutoOpen>]
 module Common =
@@ -19,14 +20,34 @@ module Common =
     let splitPath (path: string) = path.Split([| '\\'; '/' |])
 
     let expandPath (replacements: Map<string, string>) (path: string) =
-        let splitPath = splitPath path
+        if path.StartsWith '$' then
 
-        [| splitPath
-           |> Array.tryHead
-           |> Option.map (fun p -> replacements.TryFind p |> Option.defaultValue p)
-           |> Option.defaultValue ""
-           yield! splitPath |> Array.tail |]
-        |> Path.Combine
+            let splitPath = splitPath path
+
+            [| splitPath
+               |> Array.tryHead
+               |> Option.map (fun p -> replacements.TryFind p |> Option.defaultValue p)
+               |> Option.defaultValue ""
+               yield! splitPath |> Array.tail |]
+            |> Path.Combine
+        else
+            path
+
+    /// <summary>
+    /// Replace arguments in text string. The syntax for arguments are @([var_name]).
+    /// `var_name` accepts the following: a-z, A-Z, 0-9, - and _.
+    /// </summary>
+    /// <param name="args"></param>
+    /// <param name="value"></param>
+    let replaceArgs (args: Map<string, string>) (value: string) =
+        Regex.Matches(value, "@\([a-zA-Z0-09-_]*?\)")
+        |> Seq.fold
+            (fun (r: string) m ->
+                match args.TryFind(m.Value.Substring(2, m.Value.Length - 3)) with
+                | Some rv -> r.Replace(m.Value, rv)
+                | None -> r)
+            value
+
 
 [<RequireQualifiedAccess>]
 type FragmentBlobType =
